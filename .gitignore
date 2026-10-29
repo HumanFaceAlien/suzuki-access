@@ -1,0 +1,30 @@
+# Android / Gradle
+*.iml
+.gradle/
+.idea/
+local.properties
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build/
+captures/
+.externalNativeBuild
+.cxx
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+# signing
+*.jks
+*.keystore
+# OS
+Thumbs.db
+# logs
+*.log
