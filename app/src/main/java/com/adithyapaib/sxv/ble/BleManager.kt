@@ -13,6 +13,7 @@ import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import java.util.UUID
 
 /**
@@ -45,6 +46,109 @@ class BleManager(
     private var scanning = false
     private var servicesDiscoveryStarted = false
     private var mtuCallbackReceived = false
+    private var writeInFlightSince = 0L
+    private var notificationsConfirmed = false
+    private val verboseReadQueue = ArrayDeque<BluetoothGattCharacteristic>()
+    private var verboseReadInFlight: BluetoothGattCharacteristic? = null
+    private val verboseReadTimeout = Runnable {
+        val stuck = verboseReadInFlight ?: return@Runnable
+        viewModel.vtrace("Sweep read ${stuck.uuid} timed out; skipping")
+        gatt?.let { readNextVerbose(it) }
+    }
+    private val rssiPoll = object : Runnable {
+        @SuppressLint("MissingPermission")
+        override fun run() {
+            val active = gatt ?: return
+            if (!viewModel.verbose.value) return
+            active.readRemoteRssi()
+            handler.postDelayed(this, RSSI_POLL_MS)
+        }
+    }
+
+    /** Called when verbose logging is switched on; describes the link that is already up. */
+    fun onVerboseEnabled() {
+        val active = gatt
+        if (active == null) {
+            viewModel.vtrace("No active GATT session; details will be logged on the next connection")
+            return
+        }
+        dumpGattTable(active)
+        if (notificationsConfirmed) startVerboseDiagnostics(active)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun dumpGattTable(gatt: BluetoothGatt) {
+        if (!viewModel.verbose.value) return
+        val device = gatt.device
+        viewModel.vtrace("Device name=${device.name} address=${device.address} bondState=${device.bondState} (10=none,11=bonding,12=bonded)")
+        for (service in gatt.services) {
+            viewModel.vtrace("SERVICE ${service.uuid} instance=${service.instanceId}")
+            for (characteristic in service.characteristics) {
+                viewModel.vtrace(
+                    "  CHAR ${characteristic.uuid} props=0x%02X [%s] instance=%d"
+                        .format(characteristic.properties, propertyNames(characteristic.properties), characteristic.instanceId)
+                )
+                for (descriptor in characteristic.descriptors) {
+                    viewModel.vtrace("    DESC ${descriptor.uuid}")
+                }
+            }
+        }
+    }
+
+    private fun propertyNames(properties: Int): String {
+        val names = listOf(
+            BluetoothGattCharacteristic.PROPERTY_BROADCAST to "BROADCAST",
+            BluetoothGattCharacteristic.PROPERTY_READ to "READ",
+            BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE to "WRITE_NO_RESP",
+            BluetoothGattCharacteristic.PROPERTY_WRITE to "WRITE",
+            BluetoothGattCharacteristic.PROPERTY_NOTIFY to "NOTIFY",
+            BluetoothGattCharacteristic.PROPERTY_INDICATE to "INDICATE",
+            BluetoothGattCharacteristic.PROPERTY_SIGNED_WRITE to "SIGNED_WRITE",
+            BluetoothGattCharacteristic.PROPERTY_EXTENDED_PROPS to "EXTENDED"
+        )
+        return names.filter { (flag, _) -> properties and flag != 0 }.joinToString(" ") { it.second }
+    }
+
+    /** Reads every readable characteristic once (Device Information etc.) and starts RSSI polling. */
+    @SuppressLint("MissingPermission")
+    private fun startVerboseDiagnostics(gatt: BluetoothGatt) {
+        if (!viewModel.verbose.value) return
+        verboseReadQueue.clear()
+        gatt.services.forEach { service ->
+            service.characteristics
+                .filter { it.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0 }
+                .forEach { verboseReadQueue.addLast(it) }
+        }
+        viewModel.vtrace("Reading ${verboseReadQueue.size} readable characteristics one at a time")
+        readNextVerbose(gatt)
+        handler.removeCallbacks(rssiPoll)
+        handler.post(rssiPoll)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun readNextVerbose(gatt: BluetoothGatt) {
+        handler.removeCallbacks(verboseReadTimeout)
+        while (true) {
+            val next = verboseReadQueue.removeFirstOrNull()
+            if (next == null) {
+                if (verboseReadInFlight != null) viewModel.vtrace("Characteristic sweep complete")
+                verboseReadInFlight = null
+                return
+            }
+            if (gatt.readCharacteristic(next)) {
+                verboseReadInFlight = next
+                handler.postDelayed(verboseReadTimeout, VERBOSE_READ_TIMEOUT_MS)
+                return
+            }
+            viewModel.vtrace("Read of ${next.uuid} was not started")
+        }
+    }
+
+    private fun describeValue(value: ByteArray): String {
+        val hex = value.joinToString("-") { "%02X".format(it.toInt() and 0xFF) }
+        val printable = value.all { it in 0x20..0x7E }
+        return if (printable && value.isNotEmpty()) "$hex \"${String(value, Charsets.US_ASCII)}\"" else hex
+    }
 
     @SuppressLint("MissingPermission")
     fun connect() {
@@ -192,6 +296,14 @@ class BleManager(
             return false
         }
 
+        // Android permits one outstanding GATT write; overlapping ones fail with
+        // WRITE_REQUEST_BUSY. Wait for onCharacteristicWrite (or a timeout).
+        val now = SystemClock.elapsedRealtime()
+        if (writeInFlightSince != 0L && now - writeInFlightSince < WRITE_TIMEOUT_MS) {
+            viewModel.trace("Display send skipped: previous write still in flight")
+            return false
+        }
+
         val packet = SuzukiDisplaySender.buildDisplayPacket(text, secondaryText)
         val visibleCharacters = listOf(text, secondaryText.orEmpty())
             .filter { it.isNotBlank() }
@@ -199,7 +311,9 @@ class BleManager(
             .length
         viewModel.trace("TX dot-matrix ($visibleCharacters chars): ${SuzukiDisplaySender.toHex(packet)}")
         val sent = SuzukiDisplaySender.sendPacket(activeGatt, channelMap.writeCharacteristic, packet)
-        if (!sent) {
+        if (sent) {
+            writeInFlightSince = now
+        } else {
             viewModel.trace("Display send failed: cluster write returned an error")
         }
         return sent
@@ -227,6 +341,15 @@ class BleManager(
                     }
                 }, MTU_FALLBACK_MS)
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                writeInFlightSince = 0L
+                notificationsConfirmed = false
+                verboseReadQueue.clear()
+                verboseReadInFlight = null
+                handler.removeCallbacks(rssiPoll)
+                handler.removeCallbacks(verboseReadTimeout)
+                viewModel.vtrace(
+                    "Disconnect status=$status (8=supervision timeout, 19=peer terminated, 22=local terminated, 133=generic error)"
+                )
                 stopScan()
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     viewModel.onDisconnected()
@@ -258,6 +381,8 @@ class BleManager(
                 return
             }
 
+            dumpGattTable(gatt)
+
             // Replicate the stock app's wake read: MyBleService.a() reads the
             // 4th service's 2nd characteristic right after connecting. This is
             // what activates the cluster's notification stream.
@@ -270,6 +395,10 @@ class BleManager(
             }
 
             viewModel.trace("Found FFF0 service with FFF1 write and FFF2 notify characteristics")
+            viewModel.trace(
+                "FFF1 properties=0x%02X (WRITE=0x08, WRITE_NO_RESPONSE=0x04) bondState=%d (10=none,11=bonding,12=bonded)"
+                    .format(channelMap.writeCharacteristic.properties, gatt.device.bondState)
+            )
             if (!viewModel.enableNotifications(gatt, channelMap.notifyCharacteristic)) {
                 failConnection("Could not enable FFF2 notifications")
             } else {
@@ -293,6 +422,26 @@ class BleManager(
             status: Int
         ) {
             viewModel.trace("Characteristic read ${characteristic.uuid}: status=$status (${value.size} bytes)")
+            viewModel.vtrace("READ ${characteristic.uuid} status=$status value=${describeValue(value)}")
+            if (characteristic.uuid == verboseReadInFlight?.uuid) readNextVerbose(gatt)
+        }
+
+        override fun onReadRemoteRssi(gatt: BluetoothGatt, rssi: Int, status: Int) {
+            viewModel.vtrace("RSSI $rssi dBm (status=$status)")
+        }
+
+        override fun onConnectionUpdated(gatt: BluetoothGatt, interval: Int, latency: Int, timeout: Int, status: Int) {
+            viewModel.vtrace(
+                "Link parameters: interval=${interval * 1.25} ms latency=$latency supervisionTimeout=${timeout * 10} ms status=$status"
+            )
+        }
+
+        override fun onPhyUpdate(gatt: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) {
+            viewModel.vtrace("PHY update tx=$txPhy rx=$rxPhy (1=1M, 2=2M, 3=coded) status=$status")
+        }
+
+        override fun onServiceChanged(gatt: BluetoothGatt) {
+            viewModel.vtrace("Service Changed indication received")
         }
 
         override fun onCharacteristicChanged(
@@ -305,6 +454,15 @@ class BleManager(
             }
         }
 
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int
+        ) {
+            writeInFlightSince = 0L
+            viewModel.trace("Cluster write completed status=$status")
+        }
+
         override fun onDescriptorWrite(
             gatt: BluetoothGatt,
             descriptor: BluetoothGattDescriptor,
@@ -313,6 +471,8 @@ class BleManager(
             if (descriptor.uuid == CCCD_UUID) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     viewModel.trace("CCCD write confirmed; notifications enabled")
+                    notificationsConfirmed = true
+                    startVerboseDiagnostics(gatt)
                 } else {
                     failConnection("CCCD write failed: $status")
                 }
@@ -370,6 +530,9 @@ class BleManager(
         const val RETRY_DELAY_MS = 1_500L
         const val SCAN_TIMEOUT_MS = 6_000L
         const val MTU_FALLBACK_MS = 2_500L
+        const val WRITE_TIMEOUT_MS = 2_000L
+        const val RSSI_POLL_MS = 5_000L
+        const val VERBOSE_READ_TIMEOUT_MS = 3_000L
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

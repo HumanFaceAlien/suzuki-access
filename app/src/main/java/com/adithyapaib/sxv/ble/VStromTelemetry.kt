@@ -24,4 +24,13 @@ data class VStromTelemetry(
      * peaking at 33 km/h.
      */
     val speed: Int = 0,
+    /**
+     * Engine temperature in °C, read raw from byte[25]. Likely oil or engine temperature rather
+     * than coolant (the V-Strom SX 250 is oil-cooled), but not yet checked against the cluster's
+     * own reading. Null when the byte is outside a plausible range.
+     *
+     * Evidence: across 218 captured frames it rises from 27 (cold, parked) to 90 while riding,
+     * dips when stopped, and falls during a break.
+     */
+    val engineTempC: Int? = null,
 )

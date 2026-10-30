@@ -35,9 +35,11 @@ App project: `C:\Users\paiad\AndroidStudioProjects\SXV`.
 [5..10]    odometer, 6 digits (km)
 [11..16]   trip A, 6 digits (tenths of km)
 [17..22]   trip B, 6 digits (tenths of km)
-[23]       gear position — always 'N' in every capture so far
+[23]       'N' in every capture (read as gear by the stock app; an independent
+           write-up of the same protocol treats it as a constant separator)
 [24]       fuel bars, ASCII '1'..'6'
-[25..27]   cumulative fuel-consumption accumulator (see §4)
+[25]       engine temperature, raw degrees C, unsigned byte (see §4)
+[26..27]   0xFF 0xFF in every capture (padding / unused fuel-economy field)
 [28]       checksum  (sum of bytes[1..27] & 0xFF, for this model — see §3)
 [29]       0x7F
 ```
@@ -67,7 +69,13 @@ plain sum for the V-STROM SX.
 - **Fuel** `[24]`: ASCII `'1'..'6'` → bars 1..6; else 0 / invalid. SXV assumes
   `fuelLiters = bars * 2.0` — **uncalibrated, marked `TODO(capacity)`**.
   Also `K = unsignedInt(b) - 64` (stored, purpose not fully identified).
-- **`[25..27]` consumption accumulator**: `NavigationActivity:203-219` decodes it as a
+- **`[25]` engine temperature (°C, raw byte)** — *supersedes the accumulator reading below.*
+  Across 218 frames in five logs it tracks engine temperature: 27 cold and parked, 67 at the
+  start of a ride, climbing to a 90 peak, 78 after a 10 minute break, 46→53 on a restart after
+  1h40. Likely oil/engine temperature (the V-STROM SX 250 is oil-cooled), **not yet checked
+  against the cluster's own reading**. `[26]/[27]` are `FF FF` in every frame (padding).
+  Surfaced in SXV as `engineTempC`.
+- **`[25..27]` consumption accumulator (old, disproved for byte 25)**: `NavigationActivity:203-219` decodes it as a
   24-bit fixed-point value into `public double Y`, but **`Y` is never read anywhere**
   in the APK; the dashboard parser (`C.java:831-832`) reads and discards it.
   - TFT editions: `parseInt(strC[0..24],2)/10/2048`
@@ -75,6 +83,11 @@ plain sum for the V-STROM SX.
   - default (V-STROM SX): `(parseInt(strC[0..13],2) + parseInt(strC[13..24],2)/2048)/10`
   - Byte[25] climbs monotonically per session (`0x1B`→`0x58`), `[26]/[27]` stay `0xFF`.
   - **Not surfaced in SXV** (covered by checksum only).
+  - **Revised after the 2026-07-10 logs (see §6):** byte `[25]` is not a fuel
+    accumulator. It tracks engine temperature in °C, so the monotonic climb above is
+    just warm-up. The SX 250 is oil-cooled, so this is probably oil/engine temperature
+    rather than coolant. Not yet compared against a cluster readout. `[26..27]` never
+    leave `FF FF`, so the 24-bit decoding above does not apply to this bike.
 
 ## 5. Phone → cluster commands
 
@@ -100,6 +113,58 @@ Checksum = same plain-sum/ones'-complement rule (model-dependent).
 - Observed ranges: speed 0..33 km/h; odometer 8882→8885 km; trip A 861.8→864.0;
   trip B 213.9→216.1; fuel always `'4'` (4 bars); gear always `'N'`.
 
+### 6a. Re-analysis of the 2026-07-10 logs (5 files, 218 frames)
+
+All frames are type `'7'`, all checksums pass, no other frame type ever arrives.
+Frames come every 5 s (±30 ms).
+
+**Byte 25 = engine temperature (°C):**
+
+| Time  | Situation                    | Byte 25                       |
+|-------|------------------------------|-------------------------------|
+| 18:54 | cold, parked                 | 27                            |
+| 19:02 | start of ride                | 67 → 88 (steady climb)        |
+| 19:17 | after ~10 min stopped        | 78 (cooled), then climbs      |
+| 19:19 | riding, then idle            | peak 90, then 89 → 88 stopped |
+| 20:49 | restart after ~1h40 parked   | 46 → 53 (warming up)          |
+
+It rises while the engine runs, flattens in the high 80s, dips when stopped, and falls
+while parked. Speed, odometer and trips decode correctly and move as expected
+(trip A ticks +0.1 km at the moment speed is non-zero).
+
+**Not yet determinable:** fuel bars stayed `'4'` throughout (fuel level never
+changed), so the fuel field is untested. `[26..27]` are constant padding.
+
+**Not available over BLE:** no RPM, gear, battery voltage or throttle field, and no
+second frame type from the bike. An independent write-up of the same protocol
+(github.com/mrwick1/suzuki-connect-re, Gixxer SF 150) reaches the same conclusion:
+the official app only parses `'7'`.
+
+**GATT table (nRF Connect):** Generic Access, Generic Attribute, Device Information
+(0x180A) and vendor service FFF0 (FFF1 write, FFF2 notify + CCCD). No hidden service.
+Device Information contents on this bike:
+
+| Characteristic     | Value                                                      |
+|--------------------|------------------------------------------------------------|
+| Manufacturer       | `Suzuki`                                                   |
+| Model number       | `XF`                                                       |
+| Serial number      | `SBM01xxxxxx` (same as the advertised name)               |
+| Software revision  | `0.1.5.9`                                                  |
+| Firmware/Hardware  | `From Host Controller` (unpopulated placeholder)           |
+| System ID          | `XX-XX-XX-XX-XX-XX-XX-XX` (derived from the MAC)           |
+| PnP ID             | Texas Instruments (vendor 0x000D), product 0, version 272  |
+| Regulatory list    | `FE-00-"experimental"`                                     |
+
+**Connection behaviour (corrects the earlier assumption):**
+- nRF Connect wrote nothing to FFF1 and the bike still streamed `'7'` frames, so no
+  identity/handshake write is needed on this bike. (The other write-up reported the
+  opposite for the Gixxer.)
+- Connections that streamed had the bike negotiate parameters (7.5 ms → 48.75 ms
+  interval, MTU 65) within about a second of connecting. Connections that never
+  negotiated stayed silent and ended in GATT error 8 (supervision timeout) after
+  20–60 s. This is an observed pattern, not a confirmed cause.
+- Bike-side disconnects show as status 19 (peer terminated).
+
 Golden frames used as regression tests:
 - Parked: `A5-37-30-30-30-30-30-38-38-38-35-30-30-38-36-34-30-30-30-32-31-36-31-4E-34-28-FF-FF-08-7F`
 - Moving: `A5-37-30-33-33-30-30-38-38-38-34-30-30-38-36-33-32-30-30-32-31-35-33-4E-34-57-FF-FF-3E-7F`
@@ -114,6 +179,48 @@ Golden frames used as regression tests:
 - `BleManager.kt`: scan-by-name, `autoConnect=true`, MTU 247, wake read, retry-via-scan.
 - `DashboardScreen.kt`: SPEED card (KM/H); preview `tripA` 86.1 → 861.8.
 - Tests: 31 total, 0 failures (added 2 golden-frame regression tests).
+- **Verbose BLE logging** (added later, not yet compiled or run): switch on the Logs tab.
+  `BleManager.kt` dumps the GATT table, sweeps readable characteristics, polls RSSI every
+  5 s, and logs link parameters, PHY changes and disconnect status codes.
+  `BleViewModel.kt` logs a per-field breakdown of each frame (byte 25, bytes 26–27,
+  checksum, changed byte positions, gap since last frame) and raises the log cap from
+  200 to 5,000 lines. `LogsScreen.kt` adds the switch and a Share button.
+
+### 7a. Later session: UI redesign, temperature, write serialization
+
+- **Dot-matrix writes are now serialized** (`BleManager.sendDisplayText`). The log showed
+  the same frame re-sent every ~170 ms; an overlapping `writeCharacteristic` failed
+  ("cluster write returned an error"). A write now waits for `onCharacteristicWrite` (2 s
+  timeout) and logs `Cluster write completed status=N`. "Dot-matrix message queued
+  successfully" only means Android accepted the request, not that the cluster received it.
+- **Engine temperature surfaced:** `VStromTelemetry.engineTempC` is byte `[25]` as a raw
+  unsigned value, accepted in 0..150, else null. Two parser tests added (real frames:
+  `0x2D` → 45, `0x52` → 82; out-of-range byte → null).
+- **UI rebuilt as four tabs** (Dashboard, Message, Logs, Settings) with new theme tokens
+  (`Color.kt`, `Type.kt`, `Dimens.kt`), reusable components in `ui/components/`, and screens
+  in `ui/screens/`. The old single-screen `ui/DashboardScreen.kt` is removed.
+- **New ViewModel state:** `sendResults` (event per write, used for haptics and the
+  recent-messages list) and `lastTelemetryAtMs` (drives "Updated Xs ago" and stale dimming
+  after 15 s).
+- **New `settings/AppSettings.kt`:** units (km/°C or mi/°F), keep-screen-on, five recent
+  messages, stored in SharedPreferences.
+- Previously invisible errors (`BleViewModel.errors`) now appear as snackbars.
+- Not done on purpose: range estimate (no consumption data), theme switch (dark only).
+- **Not compiled or run** (no JDK/SDK available in that session).
+
+### 7b. Why the display may not update (unconfirmed)
+
+Android accepts every FFF1 write, but the display has not been seen to change. Candidates:
+1. The cluster rejects the write at the link level (needs encryption or bonding). The write
+   completion status in the Logs tab will show 5 or 15 if so; FFF1 properties and bond
+   state are logged at connect.
+2. The `'5'` packet layout is off by one byte. `SuzukiDisplaySender` writes text at bytes
+   3..24, `'N'` at 25, `FF FF` at 26..27. The sibling `'4'` builder uses a count byte at 3,
+   text at 4..23, `'N'` at 24, `FF` at 25..27. This section's earlier note (§5) calls the
+   dot-matrix command `'1'` with a `"?1"` template while the code sends `'5'`; one of them
+   is wrong. Check against the decompiled APK.
+3. The cluster needs a setup command first (`'3'` status request or `'6'` rider name, not
+   ported).
 
 ## 8. Open items
 
@@ -123,7 +230,16 @@ Golden frames used as regression tests:
    `null` if assembly ≠ 30 bytes, so it won't transmit garbage.
 4. Verify the new connection stack end-to-end with the bike powered on (trace via
    `adb logcat -s SXV-BLE`).
-5. SXV is **not** a git repo — `git init` + commit before further changes.
+5. Build and run the verbose logging changes (never compiled; no JDK/SDK on the machine
+   where they were written), then capture a full ride with verbose on.
+6. Confirm byte `[25]` against the cluster's temperature readout (if the SX shows one).
+   It is already surfaced on the Dashboard as "Engine temp".
+9. Find out why dot-matrix writes don't change the display (see §7b), then build and run
+   the whole UI redesign on a device.
+7. Change the fuel level (or note the low-fuel light) during a capture to test the fuel
+   bars field.
+8. Find out why some connections stay silent: compare verbose logs of a streaming and a
+   silent connection (parameter update, MTU, bond state).
 
 ## 9. Tooling notes
 

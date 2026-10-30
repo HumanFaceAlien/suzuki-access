@@ -163,6 +163,25 @@ class SuzukiPacketParserTest {
     }
 
     @Test
+    fun readsEngineTemperatureFromByte25() {
+        // Real frames from a ride log: byte[25] 0x2D (45) while warming, 0x52 (82) once hot.
+        val warming = parseHexFrame("A5-37-30-31-36-30-31-32-33-33-34-30-30-33-39-35-30-30-30-31-33-35-39-4E-35-2D-FF-FF-0C-7F")
+        val hot = parseHexFrame("A5-37-30-30-30-30-31-32-33-33-37-30-30-33-39-37-34-30-30-31-33-38-33-4E-35-52-FF-FF-30-7F")
+
+        assertEquals(45, warming?.engineTempC)
+        assertEquals(82, hot?.engineTempC)
+    }
+
+    @Test
+    fun ignoresImplausibleTemperatureBytes() {
+        val frame = packetFor("7000" + "012345" + "000500" + "000600" + "X" + "4")
+        frame[25] = 0xFF.toByte()
+        frame[28] = SuzukiChecksum.compute(frame).toByte()
+
+        assertNull(SuzukiPacketParser.parse(frame)?.engineTempC)
+    }
+
+    @Test
     fun rejectsNonDigitMileageFields() {
         assertNull(SuzukiPacketParser.parse(packetFor("7000" + "0123X5" + "000500" + "000600" + "X" + "4")))
         assertNull(SuzukiPacketParser.parse(packetFor("7000" + "012345" + "000X00" + "000600" + "X" + "4")))
