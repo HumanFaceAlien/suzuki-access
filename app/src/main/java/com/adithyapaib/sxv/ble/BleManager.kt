@@ -14,6 +14,8 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.adithyapaib.sxv.settings.PairedBike
+import com.adithyapaib.sxv.settings.SettingsViewModel
 import java.util.UUID
 
 /**
@@ -32,12 +34,18 @@ import java.util.UUID
  *  5. Enable FFF2 notifications.
  *  6. Write the identity frame ('6') to FFF1. Without it the cluster accepts
  *     the subscription but sends nothing, and drops the link after about a
- *     minute; this is what the official app does when it connects. Resent up
- *     to [MAX_IDENTITY_ATTEMPTS] times if no telemetry follows.
+ *     minute; this is what the official app does when it connects. It carries
+ *     the rider name from Settings, which the cluster shows as its welcome
+ *     greeting. Resent up to [MAX_IDENTITY_ATTEMPTS] times if no telemetry
+ *     follows.
  *
- * Other Suzuki clusters nearby (e.g. an Access scooter, `SAS…`) also match the
- * name pattern, so the known bike is preferred and any device without FFF0 is
- * skipped for the rest of the session.
+ * Pairing: until a bike is remembered, the scan collects every cluster-like
+ * device for [SCAN_TIMEOUT_MS] and connects to the strongest signal, which is
+ * the bike the phone is sitting on even on a group ride. The first one that
+ * streams telemetry is saved ([BleViewModel.rememberBike]) and from then on
+ * only that bike is connected to; Settings > Forget bike starts over. Other
+ * Suzuki clusters (e.g. an Access scooter, `SAS…`) also match the name
+ * pattern, so any device without FFF0 is skipped for the rest of the session.
  */
 class BleManager(
     context: Context,
@@ -62,6 +70,8 @@ class BleManager(
     private var quietWritePending = false
     private val rejectedAddresses = mutableSetOf<String>()
     private var scanCandidate: BluetoothDevice? = null
+    private var scanCandidateRssi = Int.MIN_VALUE
+    private val scanSeen = mutableSetOf<String>()
     private val identityWatchdog = Runnable {
         val active = gatt ?: return@Runnable
         if (telemetrySeen) return@Runnable
@@ -175,8 +185,12 @@ class BleManager(
     }
 
     /** Called by the ViewModel for every valid telemetry frame. */
+    @SuppressLint("MissingPermission")
     fun onTelemetryFrame() {
-        if (!telemetrySeen) viewModel.trace("Telemetry stream started")
+        if (!telemetrySeen) {
+            viewModel.trace("Telemetry stream started")
+            gatt?.device?.let { viewModel.rememberBike(PairedBike(it.address, it.name.orEmpty())) }
+        }
         telemetrySeen = true
         retryAttempt = 0
         handler.removeCallbacks(identityWatchdog)
@@ -186,9 +200,9 @@ class BleManager(
     private fun sendIdentity(gatt: BluetoothGatt) {
         val channelMap = viewModel.currentClusterChannelMap() ?: return
         identityAttempts++
-        val packet = SuzukiCommandPacket.buildIdentityPacket(IDENTITY_NAME)
-        viewModel.trace("TX identity (attempt $identityAttempts/$MAX_IDENTITY_ATTEMPTS): ${SuzukiDisplaySender.toHex(packet)}")
-        identityWritePending = SuzukiDisplaySender.sendPacket(gatt, channelMap.writeCharacteristic, packet)
+        val packet = SuzukiCommandPacket.buildIdentityPacket(SettingsViewModel.identityName(appContext))
+        viewModel.trace("TX identity (attempt $identityAttempts/$MAX_IDENTITY_ATTEMPTS): ${ClusterWriter.toHex(packet)}")
+        identityWritePending = ClusterWriter.sendPacket(gatt, channelMap.writeCharacteristic, packet)
         if (identityWritePending) {
             writeInFlightSince = SystemClock.elapsedRealtime()
         } else {
@@ -220,13 +234,18 @@ class BleManager(
     @SuppressLint("MissingPermission")
     private fun startScan() {
         if (scanner == null) {
-            viewModel.trace("No LE scanner; falling back to direct connect by MAC")
-            connectDirect()
+            connectWithoutScan("No LE scanner")
             return
         }
         scanning = true
         scanCandidate = null
-        viewModel.trace("Scanning for $TARGET_DEVICE_NAME (other SA/SB/SC 12-char names as fallback)...")
+        scanCandidateRssi = Int.MIN_VALUE
+        scanSeen.clear()
+        val bike = viewModel.pairedBike.value
+        viewModel.trace(
+            if (bike != null) "Scanning for paired bike ${bike.name} @ ${bike.address}..."
+            else "Not paired yet; scanning ${SCAN_TIMEOUT_MS / 1000}s for the nearest SA/SB/SC cluster..."
+        )
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
@@ -234,13 +253,11 @@ class BleManager(
             scanner.startScan(null, settings, scanCallback)
         } catch (se: SecurityException) {
             scanning = false
-            viewModel.trace("Scan permission denied: ${se.message}; falling back to direct connect")
-            connectDirect()
+            connectWithoutScan("Scan permission denied: ${se.message}")
             return
         } catch (ise: IllegalStateException) {
             scanning = false
-            viewModel.trace("Scanner unavailable: ${ise.message}; falling back to direct connect")
-            connectDirect()
+            connectWithoutScan("Scanner unavailable: ${ise.message}")
             return
         }
         handler.postDelayed({
@@ -248,15 +265,31 @@ class BleManager(
                 stopScan()
                 val candidate = scanCandidate
                 scanCandidate = null
-                if (candidate != null) {
-                    viewModel.trace("Scan timed out without $TARGET_DEVICE_NAME; trying ${candidate.address}")
-                    connectToDevice(candidate)
-                } else {
-                    viewModel.trace("Scan timed out; falling back to direct connect by MAC")
-                    connectDirect()
+                when {
+                    bike != null -> connectWithoutScan("Paired bike not seen in ${SCAN_TIMEOUT_MS / 1000}s")
+                    candidate != null -> {
+                        viewModel.trace("Strongest cluster: ${candidate.name} @ ${candidate.address} ($scanCandidateRssi dBm)")
+                        connectToDevice(candidate)
+                    }
+                    else -> failConnection("No Suzuki cluster found; switch the ignition on and try again")
                 }
             }
         }, SCAN_TIMEOUT_MS)
+    }
+
+    /**
+     * When scanning is unavailable or the paired bike was not seen, waits for it
+     * with an autoConnect GATT connection. Before pairing there is no address to
+     * wait for, so this fails instead.
+     */
+    private fun connectWithoutScan(reason: String) {
+        val bike = viewModel.pairedBike.value
+        if (bike == null) {
+            failConnection("$reason; no paired bike to connect to directly")
+        } else {
+            viewModel.trace("$reason; connecting directly to ${bike.address}")
+            connectDirect(bike.address)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -270,9 +303,9 @@ class BleManager(
     }
 
     @SuppressLint("MissingPermission")
-    private fun connectDirect() {
+    private fun connectDirect(address: String) {
         try {
-            val device = adapter?.getRemoteDevice(TARGET_DEVICE_ADDRESS)
+            val device = adapter?.getRemoteDevice(address)
             if (device == null) {
                 failConnection("Bluetooth adapter unavailable")
                 return
@@ -304,27 +337,34 @@ class BleManager(
             if (!scanning) return
             val device = result.device
             val name = result.scanRecord?.deviceName ?: device.name ?: ""
-            val isTarget = device.address.equals(TARGET_DEVICE_ADDRESS, ignoreCase = true) ||
-                name == TARGET_DEVICE_NAME
+            val bike = viewModel.pairedBike.value
+            if (bike != null) {
+                // Paired: every other cluster is someone else's bike.
+                if (device.address.equals(bike.address, ignoreCase = true)) {
+                    viewModel.trace("Found paired bike: $name @ ${device.address}")
+                    stopScan()
+                    handler.removeCallbacksAndMessages(null)
+                    connectToDevice(device)
+                }
+                return
+            }
             val looksLikeCluster = name.length == 12 &&
                 (name.contains("SA") || name.contains("SB") || name.contains("SC"))
-            if (isTarget) {
-                viewModel.trace("Found cluster: $name @ ${device.address}")
-                stopScan()
-                handler.removeCallbacksAndMessages(null)
-                connectToDevice(device)
-            } else if (looksLikeCluster && device.address !in rejectedAddresses && scanCandidate == null) {
-                // Keep scanning for the known bike; only fall back to this one on timeout.
-                viewModel.trace("Seen other cluster-like device $name @ ${device.address}; still looking for $TARGET_DEVICE_NAME")
+            if (!looksLikeCluster || device.address in rejectedAddresses) return
+            // Keep scanning the whole window; the strongest signal wins on timeout.
+            if (scanSeen.add(device.address)) {
+                viewModel.trace("Seen cluster $name @ ${device.address} (${result.rssi} dBm)")
+            }
+            if (result.rssi > scanCandidateRssi || device.address == scanCandidate?.address) {
                 scanCandidate = device
+                scanCandidateRssi = result.rssi
             }
         }
 
         override fun onScanFailed(errorCode: Int) {
             if (!scanning) return
             scanning = false
-            viewModel.trace("Scan failed (errorCode=$errorCode); falling back to direct connect")
-            connectDirect()
+            connectWithoutScan("Scan failed (errorCode=$errorCode)")
         }
     }
 
@@ -342,52 +382,11 @@ class BleManager(
         disconnect()
     }
 
-    @SuppressLint("MissingPermission")
-    fun sendDisplayText(text: String): Boolean {
-        return sendDisplayText(text = text, secondaryText = null)
-    }
-
-    @SuppressLint("MissingPermission")
-    fun sendDisplayText(text: String, secondaryText: String?): Boolean {
-        val activeGatt = gatt
-        if (activeGatt == null) {
-            viewModel.trace("Display send skipped: no active GATT session")
-            return false
-        }
-
-        val channelMap = viewModel.currentClusterChannelMap() ?: viewModel.resolveClusterChannelMap(activeGatt)
-        if (channelMap == null) {
-            viewModel.trace("Display send skipped: FFF1 write characteristic unavailable")
-            return false
-        }
-
-        // Android permits one outstanding GATT write; overlapping ones fail with
-        // WRITE_REQUEST_BUSY. Wait for onCharacteristicWrite (or a timeout).
-        val now = SystemClock.elapsedRealtime()
-        if (writeInFlightSince != 0L && now - writeInFlightSince < WRITE_TIMEOUT_MS) {
-            viewModel.trace("Display send skipped: previous write still in flight")
-            return false
-        }
-
-        val packet = SuzukiDisplaySender.buildDisplayPacket(text, secondaryText)
-        val visibleCharacters = listOf(text, secondaryText.orEmpty())
-            .filter { it.isNotBlank() }
-            .joinToString(separator = " | ")
-            .length
-        viewModel.trace("TX dot-matrix ($visibleCharacters chars): ${SuzukiDisplaySender.toHex(packet)}")
-        val sent = SuzukiDisplaySender.sendPacket(activeGatt, channelMap.writeCharacteristic, packet)
-        if (sent) {
-            writeInFlightSince = now
-        } else {
-            viewModel.trace("Display send failed: cluster write returned an error")
-        }
-        return sent
-    }
-
     /**
-     * Writes a prebuilt frame (navigation) to FFF1. Shares the one-write-at-a-time
-     * slot with display messages and returns false, without logging, when the slot
-     * is busy; the caller resends on its next tick. Only failures reach the log.
+     * Writes a prebuilt frame (navigation) to FFF1. Android allows one outstanding
+     * GATT write, and the identity handshake uses the same slot, so this returns
+     * false, without logging, while a write is in flight; the caller resends on
+     * its next tick. Only failures reach the log.
      */
     @SuppressLint("MissingPermission")
     fun sendFrame(packet: ByteArray): Boolean {
@@ -395,7 +394,7 @@ class BleManager(
         val channelMap = viewModel.currentClusterChannelMap() ?: return false
         val now = SystemClock.elapsedRealtime()
         if (writeInFlightSince != 0L && now - writeInFlightSince < WRITE_TIMEOUT_MS) return false
-        val sent = SuzukiDisplaySender.sendPacket(activeGatt, channelMap.writeCharacteristic, packet)
+        val sent = ClusterWriter.sendPacket(activeGatt, channelMap.writeCharacteristic, packet)
         if (sent) {
             writeInFlightSince = now
             quietWritePending = true
@@ -622,10 +621,6 @@ class BleManager(
     }
 
     private companion object {
-        const val TARGET_DEVICE_ADDRESS = "XX:XX:XX:XX:XX:XX"
-        const val TARGET_DEVICE_NAME = "SBM01xxxxxx"
-        /** Rider name sent in the identity frame; the cluster may show it as a greeting. */
-        const val IDENTITY_NAME = "SXV"
         const val MAX_IDENTITY_ATTEMPTS = 3
         const val IDENTITY_TIMEOUT_MS = 8_000L
         const val MAX_RETRIES = 3

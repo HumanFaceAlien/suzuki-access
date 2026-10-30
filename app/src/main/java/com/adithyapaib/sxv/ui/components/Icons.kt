@@ -15,7 +15,8 @@ import androidx.compose.ui.unit.dp
 
 enum class AppTab(val label: String) {
     Dashboard("Ride"),
-    Message("Message"),
+    Fuel("Fuel"),
+    Service("Service"),
     Logs("Logs"),
     Settings("Settings")
 }
@@ -36,10 +37,20 @@ fun TabIcon(tab: AppTab, tint: Color, modifier: Modifier = Modifier) {
                 }
                 drawPath(head, tint, style = stroke)
             }
-            AppTab.Message -> {
-                drawRect(tint, topLeft = Offset(w * 0.1f, w * 0.22f), size = Size(w * 0.8f, w * 0.5f), style = stroke)
-                drawLine(tint, Offset(w * 0.26f, w * 0.4f), Offset(w * 0.74f, w * 0.4f), px, StrokeCap.Round)
-                drawLine(tint, Offset(w * 0.26f, w * 0.56f), Offset(w * 0.56f, w * 0.56f), px, StrokeCap.Round)
+            AppTab.Fuel -> {
+                // Pump body, a level line, and the hose curling to the nozzle.
+                drawRect(tint, topLeft = Offset(w * 0.18f, w * 0.16f), size = Size(w * 0.4f, w * 0.68f), style = stroke)
+                drawLine(tint, Offset(w * 0.18f, w * 0.4f), Offset(w * 0.58f, w * 0.4f), px)
+                val hose = Path().apply {
+                    moveTo(w * 0.58f, w * 0.3f); lineTo(w * 0.78f, w * 0.3f); lineTo(w * 0.78f, w * 0.7f); lineTo(w * 0.86f, w * 0.7f)
+                }
+                drawPath(hose, tint, style = stroke)
+            }
+            AppTab.Service -> {
+                // Ruled meter with a tick: the service countdown.
+                drawRect(tint, topLeft = Offset(w * 0.1f, w * 0.38f), size = Size(w * 0.8f, w * 0.24f), style = stroke)
+                drawRect(tint, topLeft = Offset(w * 0.1f, w * 0.38f), size = Size(w * 0.5f, w * 0.24f))
+                drawLine(tint, Offset(w * 0.75f, w * 0.18f), Offset(w * 0.75f, w * 0.82f), px, StrokeCap.Round)
             }
             AppTab.Logs -> {
                 listOf(0.24f, 0.5f, 0.76f).forEachIndexed { index, y ->

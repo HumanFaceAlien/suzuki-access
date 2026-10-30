@@ -9,6 +9,8 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.adithyapaib.sxv.settings.PairedBike
+import com.adithyapaib.sxv.settings.SettingsViewModel
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +34,6 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
         val SERVICE_UUID: UUID = UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb")
         val WRITE_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
         val NOTIFICATION_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb")
-        const val TARGET_DEVICE_ADDRESS = "XX:XX:XX:XX:XX:XX"
         const val LOG_LIMIT = 200
         const val VERBOSE_LOG_LIMIT = 5_000
     }
@@ -64,21 +65,6 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     private var lastFrame: ByteArray? = null
     private var lastFrameAtMs = 0L
 
-    private val _displayInput = MutableStateFlow("")
-    val displayInput: StateFlow<String> = _displayInput.asStateFlow()
-
-    private val _displaySecondaryInput = MutableStateFlow("")
-    val displaySecondaryInput: StateFlow<String> = _displaySecondaryInput.asStateFlow()
-
-    private val _isSendingDisplayText = MutableStateFlow(false)
-    val isSendingDisplayText: StateFlow<Boolean> = _isSendingDisplayText.asStateFlow()
-
-    /** Outcome of one dot-matrix write attempt; [message] is the text that was composed for the cluster. */
-    data class DisplaySendResult(val message: String, val success: Boolean)
-
-    private val _sendResults = MutableSharedFlow<DisplaySendResult>(extraBufferCapacity = 4)
-    val sendResults: SharedFlow<DisplaySendResult> = _sendResults.asSharedFlow()
-
     /** Wall-clock time of the last valid telemetry frame; 0 until the first one arrives. */
     private val _lastTelemetryAtMs = MutableStateFlow(0L)
     val lastTelemetryAtMs: StateFlow<Long> = _lastTelemetryAtMs.asStateFlow()
@@ -87,6 +73,10 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     private val recorder = com.adithyapaib.sxv.ride.RoadbookRecorder()
     private val _roadbook = MutableStateFlow<List<com.adithyapaib.sxv.ride.RoadbookEntry>>(emptyList())
     val roadbook: StateFlow<List<com.adithyapaib.sxv.ride.RoadbookEntry>> = _roadbook.asStateFlow()
+
+    /** The bike this phone is locked to; null until the first connection streams telemetry. */
+    private val _pairedBike = MutableStateFlow(SettingsViewModel.pairedBike(application))
+    val pairedBike: StateFlow<PairedBike?> = _pairedBike.asStateFlow()
 
     private var bleManager: BleManager? = null
     private var clusterChannelMap: ClusterChannelMap? = null
@@ -108,11 +98,6 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     init {
         viewModelScope.launch {
             connectionState.collect { state -> _roadbook.value = recorder.onConnection(state) }
-        }
-        viewModelScope.launch {
-            sendResults.collect { result ->
-                if (result.success) _roadbook.value = recorder.onMessageSent(result.message)
-            }
         }
         viewModelScope.launch {
             notifications.collect { bytes ->
@@ -198,16 +183,24 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
         bleManager?.disconnect()
     }
 
+    /** Called by [BleManager] once a cluster streams telemetry; the first one becomes this phone's bike. */
+    fun rememberBike(bike: PairedBike) {
+        if (_pairedBike.value != null) return
+        trace("Paired with ${bike.name.ifEmpty { "cluster" }} @ ${bike.address}; other clusters are now ignored")
+        _pairedBike.value = bike
+        SettingsViewModel.savePairedBike(getApplication(), bike)
+    }
+
+    /** Drops the paired bike and the link, so the next connect pairs with the nearest cluster. */
+    fun forgetBike() {
+        trace("Forgot paired bike ${_pairedBike.value?.address}")
+        bleManager?.disconnect()
+        _pairedBike.value = null
+        SettingsViewModel.savePairedBike(getApplication(), null)
+    }
+
     fun clearLogs() {
         _logs.value = emptyList()
-    }
-
-    fun updateDisplayInput(value: String) {
-        _displayInput.value = value
-    }
-
-    fun updateDisplaySecondaryInput(value: String) {
-        _displaySecondaryInput.value = value
     }
 
     fun trace(message: String) {
@@ -218,7 +211,7 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     }
 
     fun onConnecting() {
-        trace("Connecting to $TARGET_DEVICE_ADDRESS")
+        trace("Connecting to ${_pairedBike.value?.address ?: "nearest cluster (not paired yet)"}")
         _connectionState.value = BleConnectionState.CONNECTING
     }
 
@@ -235,49 +228,12 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
 
     fun onConnectionError(message: String) {
         clusterChannelMap = null
-        _isSendingDisplayText.value = false
         trace("ERROR: $message")
         _connectionState.value = BleConnectionState.ERROR
         _errors.tryEmit(message)
     }
 
     fun currentClusterChannelMap(): ClusterChannelMap? = clusterChannelMap
-
-    fun sendDisplayText() {
-        val message = _displayInput.value
-        val secondaryMessage = _displaySecondaryInput.value
-        if (message.isBlank() && secondaryMessage.isBlank()) {
-            trace("Display send ignored: message is empty")
-            _errors.tryEmit("Enter at least one dot-matrix field before sending")
-            return
-        }
-
-        val manager = bleManager
-        if (manager == null) {
-            onConnectionError("BLE manager is not attached")
-            return
-        }
-
-        if (_connectionState.value != BleConnectionState.CONNECTED) {
-            trace("Display send ignored: cluster is not connected")
-            _errors.tryEmit("Connect to the bike before sending display text")
-            return
-        }
-
-        _isSendingDisplayText.value = true
-        val sent = manager.sendDisplayText(message, secondaryMessage)
-        _isSendingDisplayText.value = false
-        val composed = listOf(message.trim(), secondaryMessage.trim())
-            .filter { it.isNotEmpty() }
-            .joinToString(" | ")
-            .take(SuzukiDisplaySender.MAX_VISIBLE_TEXT_LENGTH)
-        _sendResults.tryEmit(DisplaySendResult(composed, sent))
-        if (sent) {
-            trace("Dot-matrix message queued successfully")
-        } else {
-            _errors.tryEmit("Display write failed")
-        }
-    }
 
     fun resolveClusterChannelMap(gatt: BluetoothGatt): ClusterChannelMap? {
         val service = gatt.services.firstOrNull { it.uuid == SERVICE_UUID }

@@ -155,7 +155,7 @@ private fun previewRoadbook(): List<RoadbookEntry> {
         RoadbookEntry(5, RoadbookEvent.MOVING, t - 60_000, 396.8, speedKmh = 18),
         RoadbookEntry(4, RoadbookEvent.STOPPED, t - 240_000, 396.8),
         RoadbookEntry(3, RoadbookEvent.WARMED_UP, t - 420_000, 396.1, engineTempC = 80),
-        RoadbookEntry(2, RoadbookEvent.MESSAGE_SENT, t - 600_000, 395.0, message = "HI | HI"),
+        RoadbookEntry(2, RoadbookEvent.CONNECTED, t - 600_000, 395.0),
         RoadbookEntry(1, RoadbookEvent.START, t - 700_000, 395.0, odometerKm = 12334)
     )
 }

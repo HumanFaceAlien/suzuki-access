@@ -54,24 +54,21 @@ class RoadbookRecorderTest {
     }
 
     @Test
-    fun fuelDropAndLinkChangesAndMessages() {
+    fun fuelDropAndLinkChanges() {
         val recorder = RoadbookRecorder { 0L }
         recorder.onConnection(BleConnectionState.CONNECTED)
         recorder.onTelemetry(frame(speed = 20, tripA = 395.0, fuel = 5))
         recorder.onTelemetry(frame(speed = 20, tripA = 395.5, fuel = 4))
-        recorder.onMessageSent("FUEL STOP")
         recorder.onConnection(BleConnectionState.DISCONNECTED)
         assertEquals(
             listOf(
                 RoadbookEvent.LINK_LOST,
-                RoadbookEvent.MESSAGE_SENT,
                 RoadbookEvent.FUEL_DROP,
                 RoadbookEvent.START,
                 RoadbookEvent.CONNECTED
             ),
             recorder.events()
         )
-        assertEquals(4, recorder.entries[2].fuelBars)
-        assertEquals("FUEL STOP", recorder.entries[1].message)
+        assertEquals(4, recorder.entries[1].fuelBars)
     }
 }

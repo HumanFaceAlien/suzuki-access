@@ -22,6 +22,17 @@ fun formatOdometer(km: Int, unit: DistanceUnit): String = formatWhole((km * unit
 fun formatTrip(km: Double, unit: DistanceUnit): String =
     String.format(Locale.getDefault(), "%,.1f", km * unit.perKm)
 
+/** Rupees with grouping: ₹1,240 or, with [decimals], ₹104.60. */
+fun formatRupees(amount: Double, decimals: Int = 0): String =
+    "₹" + String.format(Locale.getDefault(), "%,.${decimals}f", amount)
+
+/** Axis-friendly rupees: ₹0, ₹800, ₹1.2K. */
+fun formatRupeesCompact(amount: Double): String = when {
+    amount >= 100_000 -> "₹" + String.format(Locale.getDefault(), "%.1fL", amount / 100_000)
+    amount >= 1_000 -> "₹" + String.format(Locale.getDefault(), "%.1fK", amount / 1_000).replace(".0K", "K")
+    else -> "₹" + String.format(Locale.getDefault(), "%.0f", amount)
+}
+
 /** Trip distance without thousands grouping, for the roadbook's fixed-width distance column. */
 fun formatTripPlain(km: Double, unit: DistanceUnit): String =
     String.format(Locale.getDefault(), "%.1f", km * unit.perKm)

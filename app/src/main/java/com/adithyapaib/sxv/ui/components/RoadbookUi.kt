@@ -312,7 +312,7 @@ fun RoadbookRoll(
             if (entries.isEmpty() && now !is NowState.Offline) {
                 item(key = "empty") {
                     Text(
-                        "Events appear here as you ride: start, warm-up, stops, fuel and messages.",
+                        "Events appear here as you ride: start, warm-up, stops and fuel.",
                         Modifier.padding(Spacing.M),
                         color = InkSoft,
                         style = MaterialTheme.typography.bodySmall
@@ -513,6 +513,5 @@ private fun RoadbookEntry.describe(unit: DistanceUnit): Pair<String, String> = w
     RoadbookEvent.STOPPED -> "Stopped" to "Speed held at zero."
     RoadbookEvent.MOVING -> "Riding again" to "Moving at ${speedKmh?.let { speedIn(unit, it) } ?: "—"} ${unit.speed}."
     RoadbookEvent.FUEL_DROP -> "Fuel down" to "${fuelBars ?: "—"} of 6 bars left."
-    RoadbookEvent.MESSAGE_SENT -> "Message sent" to "“${message.orEmpty()}” written to the cluster."
     RoadbookEvent.LINK_LOST -> "Link lost" to "No data until it reconnects."
 }

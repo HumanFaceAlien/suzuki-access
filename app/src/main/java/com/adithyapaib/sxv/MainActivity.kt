@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import com.adithyapaib.sxv.ble.BleViewModel
+import com.adithyapaib.sxv.garage.GarageViewModel
 import com.adithyapaib.sxv.settings.SettingsViewModel
 import com.adithyapaib.sxv.ui.SxvApp
 import com.adithyapaib.sxv.ui.theme.SXVTheme
@@ -22,6 +23,7 @@ import com.adithyapaib.sxv.ui.theme.SXVTheme
 class MainActivity : ComponentActivity() {
     private val bleViewModel: BleViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val garageViewModel: GarageViewModel by viewModels()
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -52,7 +54,7 @@ class MainActivity : ComponentActivity() {
         bleViewModel.attachBle(this)
         setContent {
             SXVTheme {
-                SxvApp(viewModel = bleViewModel, settings = settingsViewModel)
+                SxvApp(viewModel = bleViewModel, settings = settingsViewModel, garage = garageViewModel)
             }
         }
 

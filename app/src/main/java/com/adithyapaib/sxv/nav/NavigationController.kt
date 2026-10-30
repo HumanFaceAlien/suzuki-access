@@ -3,7 +3,7 @@ package com.adithyapaib.sxv.nav
 import android.content.Context
 import android.text.format.DateFormat
 import com.adithyapaib.sxv.ble.SuzukiCommandPacket
-import com.adithyapaib.sxv.ble.SuzukiDisplaySender
+import com.adithyapaib.sxv.ble.ClusterWriter
 import java.time.LocalTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -89,7 +89,7 @@ class NavigationController(
                 remainingDistance = "05.0",
                 remainingDistanceUnit = 'K',
             )
-            trace("TX nav test, maneuver byte $maneuverByte: ${SuzukiDisplaySender.toHex(packet)}")
+            trace("TX nav test, maneuver byte $maneuverByte: ${ClusterWriter.toHex(packet)}")
             repeat(TEST_SECONDS) {
                 if (isConnected()) send(packet)
                 delay(REFRESH_MS)
@@ -121,7 +121,7 @@ class NavigationController(
         val summary = "${step.maneuver.label} (byte ${step.maneuver.clusterByte}), " +
             "${step.distanceMeters ?: "?"} m, ${step.remainingMeters ?: "?"} m left, ETA ${step.eta ?: "?"}"
         if (summary != lastSummary) {
-            trace("TX nav: $summary \"${step.instruction}\" ${SuzukiDisplaySender.toHex(packet)}")
+            trace("TX nav: $summary \"${step.instruction}\" ${ClusterWriter.toHex(packet)}")
             lastSummary = summary
         }
         if (send(packet)) showing = true
@@ -129,7 +129,7 @@ class NavigationController(
 
     private suspend fun endNavigation() {
         val packet = SuzukiCommandPacket.buildNavigationEndPacket()
-        trace("TX nav end: ${SuzukiDisplaySender.toHex(packet)}")
+        trace("TX nav end: ${ClusterWriter.toHex(packet)}")
         // A second copy in case the first one met a busy link.
         repeat(2) {
             if (isConnected()) send(packet)
