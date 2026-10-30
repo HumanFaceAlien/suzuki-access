@@ -28,3 +28,6 @@ out/
 Thumbs.db
 # logs
 *.log
+
+# tooling
+.boost/
