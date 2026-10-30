@@ -4,201 +4,191 @@ import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.adithyapaib.sxv.ble.BleConnectionState
 import com.adithyapaib.sxv.ble.VStromTelemetry
+import com.adithyapaib.sxv.ride.RoadbookEntry
+import com.adithyapaib.sxv.ride.RoadbookEvent
 import com.adithyapaib.sxv.settings.DistanceUnit
 import com.adithyapaib.sxv.ui.STALE_AFTER_MS
-import com.adithyapaib.sxv.ui.components.ButtonVariant
-import com.adithyapaib.sxv.ui.components.FuelCard
-import com.adithyapaib.sxv.ui.components.HeroSpeedCard
-import com.adithyapaib.sxv.ui.components.MetricCard
-import com.adithyapaib.sxv.ui.components.PrimaryButton
-import com.adithyapaib.sxv.ui.components.StatusChip
+import com.adithyapaib.sxv.ui.components.HeaderBox
+import com.adithyapaib.sxv.ui.components.NowState
+import com.adithyapaib.sxv.ui.components.RoadbookRoll
+import com.adithyapaib.sxv.ui.components.StatusMark
+import com.adithyapaib.sxv.ui.components.TextAction
+import com.adithyapaib.sxv.ui.components.rememberLiveTripKm
+import com.adithyapaib.sxv.ui.components.statusStyle
 import com.adithyapaib.sxv.ui.formatAge
-import com.adithyapaib.sxv.ui.formatOdometer
-import com.adithyapaib.sxv.ui.formatTrip
 import com.adithyapaib.sxv.ui.rememberNowMs
-import com.adithyapaib.sxv.ui.speedIn
+import com.adithyapaib.sxv.ui.theme.Ink
+import com.adithyapaib.sxv.ui.theme.InkSoft
 import com.adithyapaib.sxv.ui.theme.SXVTheme
 import com.adithyapaib.sxv.ui.theme.Spacing
-import com.adithyapaib.sxv.ui.theme.StatusAmber
-import com.adithyapaib.sxv.ui.theme.TextMuted
-import com.adithyapaib.sxv.ui.theme.TextSecondary
 
+/** The Ride tab: status, the ruled header box, and the roadbook roll. */
 @Composable
 fun DashboardScreen(
     connectionState: BleConnectionState,
     telemetry: VStromTelemetry?,
     lastUpdateMs: Long,
+    roadbook: List<RoadbookEntry>,
     unit: DistanceUnit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val now = rememberNowMs()
-    val ageMs = if (lastUpdateMs == 0L) null else (now - lastUpdateMs).coerceAtLeast(0L)
-    // Values are dimmed once they stop being current, whether the link dropped or the cluster went quiet.
+    val clock = rememberNowMs()
+    val ageMs = if (lastUpdateMs == 0L) null else (clock - lastUpdateMs).coerceAtLeast(0L)
     val stale = telemetry != null && (ageMs ?: 0L) > STALE_AFTER_MS
+    val connected = connectionState == BleConnectionState.CONNECTED
+    val now = when {
+        !connected -> NowState.Offline(connectionState)
+        telemetry == null -> NowState.Waiting
+        stale -> NowState.Stale(telemetry.speed, telemetry.tripB)
+        telemetry.speed > 0 -> NowState.Riding(telemetry.speed, telemetry.tripB)
+        else -> NowState.Stopped(telemetry.tripB)
+    }
+    val liveTripKm = rememberLiveTripKm(
+        tripKm = telemetry?.tripA,
+        speedKmh = telemetry?.speed ?: 0,
+        lastUpdateMs = lastUpdateMs,
+        live = connected && !stale
+    )
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    val status: @Composable () -> Unit = {
+        StatusBar(connectionState, ageMs, stale, onDisconnect)
+    }
     val header: @Composable () -> Unit = {
-        DashboardHeader(connectionState)
-        ConnectionButton(connectionState, onConnect, onDisconnect)
-        FreshnessLabel(ageMs, stale)
-    }
-    val speed: @Composable () -> Unit = {
-        HeroSpeedCard(
-            speed = speedIn(unit, telemetry?.speed ?: 0),
-            unit = unit.speed,
-            dimmed = stale || telemetry == null
+        HeaderBox(
+            speedKmh = telemetry?.speed,
+            engineTempC = telemetry?.engineTempC,
+            fuelBars = telemetry?.fuelBars ?: 0,
+            fuelLiters = telemetry?.fuelLiters ?: 0.0,
+            fuelValid = telemetry?.isFuelValid == true,
+            unit = unit,
+            stale = stale || (!connected && telemetry != null)
         )
-    }
-    val details: @Composable () -> Unit = {
-        FuelCard(
-            bars = telemetry?.fuelBars ?: 0,
-            liters = telemetry?.fuelLiters ?: 0.0,
-            isValid = telemetry?.isFuelValid == true,
-            dimmed = stale
-        )
-        MetricCard(
-            label = "Engine temp",
-            value = telemetry?.engineTempC?.let { unit.temperatureFromCelsius(it).toString() } ?: "—",
-            unit = unit.temperature,
-            modifier = Modifier.fillMaxWidth(),
-            dimmed = stale
-        )
-        MetricCard(
-            label = "Odometer",
-            value = telemetry?.let { formatOdometer(it.odometer, unit) } ?: "—",
-            unit = unit.distance,
-            modifier = Modifier.fillMaxWidth(),
-            dimmed = stale
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.M)) {
-            MetricCard(
-                label = "Trip A",
-                value = telemetry?.let { formatTrip(it.tripA, unit) } ?: "—",
-                unit = unit.distance,
-                modifier = Modifier.weight(1f),
-                dimmed = stale
-            )
-            MetricCard(
-                label = "Trip B",
-                value = telemetry?.let { formatTrip(it.tripB, unit) } ?: "—",
-                unit = unit.distance,
-                modifier = Modifier.weight(1f),
-                dimmed = stale
-            )
-        }
     }
 
     if (landscape) {
         Row(
-            modifier = modifier.fillMaxSize().padding(Spacing.M),
+            modifier.fillMaxSize().padding(Spacing.M),
             horizontalArrangement = Arrangement.spacedBy(Spacing.M)
         ) {
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.M)
-            ) { header(); speed() }
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(Spacing.M)
-            ) { details() }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.M - 4.dp)) {
+                status()
+                header()
+            }
+            RoadbookRoll(roadbook, now, liveTripKm, unit, onConnect, onDisconnect, Modifier.weight(1.15f))
         }
     } else {
         Column(
-            modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.M),
-            verticalArrangement = Arrangement.spacedBy(Spacing.M)
-        ) { header(); speed(); details() }
-    }
-}
-
-@Composable
-private fun DashboardHeader(state: BleConnectionState) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text("SXV", style = MaterialTheme.typography.headlineSmall)
-            Text("V-Strom instrument link", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            modifier.fillMaxSize().padding(horizontal = Spacing.M).padding(top = Spacing.S, bottom = Spacing.M),
+            verticalArrangement = Arrangement.spacedBy(Spacing.M - 4.dp)
+        ) {
+            status()
+            header()
+            RoadbookRoll(roadbook, now, liveTripKm, unit, onConnect, onDisconnect, Modifier.weight(1f))
         }
-        StatusChip(state)
-    }
-}
-
-/** One stateful action instead of two buttons with one always disabled. */
-@Composable
-private fun ConnectionButton(state: BleConnectionState, onConnect: () -> Unit, onDisconnect: () -> Unit) {
-    when (state) {
-        BleConnectionState.CONNECTED -> PrimaryButton("Disconnect", onDisconnect, variant = ButtonVariant.Outlined)
-        BleConnectionState.CONNECTING -> PrimaryButton("Cancel", onDisconnect, variant = ButtonVariant.Outlined)
-        BleConnectionState.ERROR -> PrimaryButton("Try again", onConnect)
-        BleConnectionState.DISCONNECTED -> PrimaryButton("Connect", onConnect)
     }
 }
 
 @Composable
-private fun FreshnessLabel(ageMs: Long?, stale: Boolean) {
-    val (text, color) = when {
-        ageMs == null -> "Waiting for data from the bike" to TextMuted
-        stale -> "No update for ${formatAge(ageMs).removeSuffix(" ago")}" to StatusAmber
-        else -> "Updated ${formatAge(ageMs)}" to TextMuted
+private fun StatusBar(state: BleConnectionState, ageMs: Long?, stale: Boolean, onDisconnect: () -> Unit) {
+    val style = state.statusStyle()
+    val age = when {
+        ageMs == null -> null
+        stale -> "no update for ${formatAge(ageMs).removeSuffix(" ago")}"
+        else -> "updated ${formatAge(ageMs)}"
     }
-    Text(text, color = color, style = MaterialTheme.typography.bodyMedium)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("SXV", color = Ink, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.width(Spacing.M))
+        Row(
+            Modifier.weight(1f).semantics(mergeDescendants = true) {
+                contentDescription = "Connection: ${style.description}${age?.let { ", $it" }.orEmpty()}"
+            },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatusMark(state)
+            Spacer(Modifier.width(Spacing.S))
+            Column {
+                Text(style.label.uppercase(), color = Ink, style = MaterialTheme.typography.labelMedium)
+                if (age != null && state == BleConnectionState.CONNECTED) {
+                    Text(
+                        age.uppercase(),
+                        color = if (stale) Ink else InkSoft,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+        if (state == BleConnectionState.CONNECTED) TextAction("Disconnect", onDisconnect)
+    }
 }
 
 // --- Previews -------------------------------------------------------------
 
 private val PreviewTelemetry = VStromTelemetry(
     odometer = 12336, tripA = 397.4, tripB = 138.3,
-    fuelBars = 5, fuelLiters = 10.0, isFuelValid = true, speed = 18, engineTempC = 82
+    fuelBars = 5, fuelLiters = 10.0, isFuelValid = true, speed = 42, engineTempC = 82
 )
 
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 360, heightDp = 900)
-@Composable
-private fun DashboardConnectedPreview() = SXVTheme {
-    DashboardScreen(
-        BleConnectionState.CONNECTED, PreviewTelemetry, System.currentTimeMillis() - 3_000,
-        DistanceUnit.KILOMETERS, {}, {}
+private fun previewRoadbook(): List<RoadbookEntry> {
+    val t = System.currentTimeMillis()
+    return listOf(
+        RoadbookEntry(5, RoadbookEvent.MOVING, t - 60_000, 396.8, speedKmh = 18),
+        RoadbookEntry(4, RoadbookEvent.STOPPED, t - 240_000, 396.8),
+        RoadbookEntry(3, RoadbookEvent.WARMED_UP, t - 420_000, 396.1, engineTempC = 80),
+        RoadbookEntry(2, RoadbookEvent.MESSAGE_SENT, t - 600_000, 395.0, message = "HI | HI"),
+        RoadbookEntry(1, RoadbookEvent.START, t - 700_000, 395.0, odometerKm = 12334)
     )
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 360, heightDp = 900)
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 844)
 @Composable
-private fun DashboardConnectingPreview() = SXVTheme {
-    DashboardScreen(BleConnectionState.CONNECTING, null, 0L, DistanceUnit.KILOMETERS, {}, {})
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 360, heightDp = 900)
-@Composable
-private fun DashboardDisconnectedStalePreview() = SXVTheme {
+private fun RideRidingPreview() = SXVTheme {
     DashboardScreen(
-        BleConnectionState.DISCONNECTED, PreviewTelemetry.copy(fuelBars = 1, speed = 0),
-        System.currentTimeMillis() - 95_000, DistanceUnit.MILES, {}, {}
+        BleConnectionState.CONNECTED, PreviewTelemetry, System.currentTimeMillis() - 2_000,
+        previewRoadbook(), DistanceUnit.KILOMETERS, {}, {}
     )
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 800, heightDp = 360)
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 844)
 @Composable
-private fun DashboardLandscapePreview() = SXVTheme {
+private fun RideOfflinePreview() = SXVTheme {
+    DashboardScreen(BleConnectionState.DISCONNECTED, null, 0L, emptyList(), DistanceUnit.KILOMETERS, {}, {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 844)
+@Composable
+private fun RideStaleReservePreview() = SXVTheme {
+    DashboardScreen(
+        BleConnectionState.CONNECTED, PreviewTelemetry.copy(speed = 0, fuelBars = 1, fuelLiters = 2.0),
+        System.currentTimeMillis() - 40_000, previewRoadbook(), DistanceUnit.MILES, {}, {}
+    )
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 844, heightDp = 390)
+@Composable
+private fun RideLandscapePreview() = SXVTheme {
     DashboardScreen(
         BleConnectionState.CONNECTED, PreviewTelemetry, System.currentTimeMillis() - 1_000,
-        DistanceUnit.KILOMETERS, {}, {}
+        previewRoadbook(), DistanceUnit.KILOMETERS, {}, {}
     )
 }

@@ -98,12 +98,39 @@ Checksum = same plain-sum/ones'-complement rule (model-dependent).
   status at bytes 23/24 (`'0'`/`'1'` GPS lock, `'0'`/`'1'` GPS fail) + 3-char
   secondary (bytes 25..27). `MAX_VISIBLE_TEXT_LENGTH = 20`.
   Implemented in `SuzukiDisplaySender.kt` (delegates checksum to `SuzukiChecksum`).
-- **`'4'`** and **`'110'`** (navigation): added builders in `SuzukiCommandPacket.kt`.
-  The navigation packet assembles `fieldM`/`fieldN`/`fieldO` into bytes 2..27; their
-  widths are **unconfirmed** (Mappls callbacks didn't decompile) — the builder returns
-  `null` if the assembled payload is not exactly 24 bytes.
-- **`'2'`** (call control), **`'3'`** (status request), **`'6'`** (rider name): present
-  in the APK, **not yet ported** to SXV.
+- **`'4'`** (missed-call text): builder in `SuzukiCommandPacket.kt`.
+- **`'1'`** (navigation, the `a531` frame): **rewritten 2026-10-30** to the layout documented
+  by github.com/pushplekh/redline-suzuki-ride-connect-google-maps `NOTES.md` (the old
+  `"?110"` template guess had distance/ETA at the wrong offsets):
+  `[2]` maneuver byte, `[3]` FF, `[4..7]` distance to next turn + `[8]` unit `M`/`K`,
+  `[9..14]` ETA (`00HHMM` 24 h, `HHMMAM`/`HHMMPM` 12 h), `[15..17]` FF, `[18..21]` distance
+  left + `[22]` unit, `[23]` status (`1` normal, `2` re-routing, `5` destination reached,
+  `0` exit), `[24]` `1` keep navigating / `0` end, `[25..27]` FF. Distances: `0450` M under
+  1 km, `01.2` K under 100 km, whole km above. Not yet seen on the V-STROM SX.
+- **Maneuver byte (`[2]`)**: the official app translates its navigation SDK's (Mappls) IDs
+  to cluster bytes (default branch, i.e. not Access/Burgman TFT): straight 8, left 1,
+  sharp left 2, slight left 3, right 4, sharp right 5, slight right 6, U-turn left 7,
+  U-turn right 39, keep left 27, keep right 28, merge left 31, merge right 32, exit left
+  44, exit right 10, roundabout 45, compass heads N 40 … NW 19, arrived 9 (with status
+  `5`), nothing to show `0x2E`. Taken from the same project's decompile (`ManeuverMap.kt`);
+  **glyphs unchecked on this cluster**, hence the arrow tester in Settings.
+- **`'6'`** (identity): sent after the CCCD write; see §6a.
+- **`'2'`** (call control), **`'3'`** (status request / heartbeat): present in the APK,
+  **not yet ported** to SXV.
+
+### 5a. Google Maps → cluster (added 2026-10-30, not built or tested)
+
+`nav/MapsNotificationListener` (a `NotificationListenerService`, needs Notification
+access) reads Google Maps' ongoing navigation notification: title/text/sub-text extras
+on current Maps ("200 m" / "Turn left onto MG Road" / "12 min · 5.3 km · 18:42"), the
+custom `nav_title`/`nav_description`/`nav_time` views on older Maps.
+`GoogleMapsNotificationParser` pulls distance, instruction, remaining distance and ETA
+(clock time, or now + remaining duration); `Maneuver.fromInstruction` maps English
+phrases to a maneuver, anything else is straight. `NavigationController` re-sends the
+current step every second while navigation runs (the official app streams ~2.7/s) and
+sends an end frame (`0x2E`, status `0`, byte 24 `0`) when the notification goes away.
+Nav writes share FFF1's one-write slot with display messages; a busy slot is skipped
+and retried next tick. Works only while SXV holds the BLE connection.
 
 ## 6. Captured data (4 nRF Connect logs, 110 thirty-byte frames)
 
@@ -232,10 +259,11 @@ Android accepts every FFF1 write, but the display has not been seen to change. C
 
 ## 8. Open items
 
-1. Port commands `'2'` / `'3'` / `'6'`.
+1. Port commands `'2'` / `'3'`.
 2. Calibrate `fuelLiters` (currently `bars * 2.0`, unverified).
-3. Confirm navigation packet field widths (`fieldM`/`fieldN`/`fieldO`) — builder returns
-   `null` if assembly ≠ 30 bytes, so it won't transmit garbage.
+3. Map maneuver bytes to the V-STROM SX's glyphs with the Settings arrow tester (bike
+   parked), then check a real Google Maps route; note any notification text the parser
+   gets wrong (verbose log shows the raw Maps notification).
 4. Verify the new connection stack end-to-end with the bike powered on (trace via
    `adb logcat -s SXV-BLE`).
 5. Build and run the verbose logging changes (never compiled; no JDK/SDK on the machine

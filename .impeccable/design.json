@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T00:00:00Z",
+  "title": "Design System: SXV",
+  "extensions": {
+    "verification": {
+      "source": "Derived from shipped Jetpack Compose source (ui/theme, ui/components, ui/screens, ui/SxvApp.kt, res/font).",
+      "compiled": false,
+      "rendered": false,
+      "note": "No Android SDK on the documenting machine; Material-drawn shapes (navigation indicator, switch) are unverified on device."
+    },
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Roll Paper", "canonical": "#FFFFFF", "tonalRamp": ["#262626", "#474747", "#6b6b6b", "#8f8f8f", "#b3b3b3", "#d6d6d6", "#f0f0f0", "#ffffff"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#141414", "tonalRamp": ["#141414", "#2a2a2a", "#404040", "#575757", "#7a7a7a", "#a3a3a3", "#d6d6d6", "#f2f2f2"] },
+      "ink-soft": { "role": "neutral", "displayName": "Soft Ink", "canonical": "#575757", "tonalRamp": ["#1c1c1c", "#2e2e2e", "#424242", "#575757", "#757575", "#9a9a9a", "#c4c4c4", "#ededed"] },
+      "ink-faint": { "role": "neutral", "displayName": "Faint Ink", "canonical": "#D6D6D6", "tonalRamp": ["#262626", "#474747", "#6b6b6b", "#8f8f8f", "#b3b3b3", "#d6d6d6", "#e8e8e8", "#f7f7f7"] },
+      "highlight": { "role": "primary", "displayName": "Rally Highlighter", "canonical": "#FF5A1F", "tonalRamp": ["#4a1604", "#7a2508", "#b83a0f", "#ff5a1f", "#ff7d4f", "#ffa47f", "#ffcbb3", "#fff1ea"] },
+      "highlight-wash": { "role": "primary", "displayName": "Highlighter Wash", "canonical": "#FFF1EA", "tonalRamp": ["#4a1604", "#7a2508", "#b83a0f", "#ff5a1f", "#ff7d4f", "#ffa47f", "#ffcbb3", "#fff1ea"] }
+    },
+    "typographyMeta": {
+      "display-large": { "displayName": "Display Large", "purpose": "Speed in the header box only; capped against system font scale so three digits fit." },
+      "display-small": { "displayName": "Display Small", "purpose": "Live trip distance role; the roll draws it at 28sp to fit the distance column." },
+      "headline-medium": { "displayName": "Headline Medium", "purpose": "Engine temperature and fuel readings." },
+      "headline-small": { "displayName": "Headline Small", "purpose": "Screen titles and the SXV wordmark." },
+      "title-large": { "displayName": "Title Large", "purpose": "NOW row title and logged row distances (tabular)." },
+      "title-medium": { "displayName": "Title Medium", "purpose": "Row titles, toggle titles, preset and recent messages, field input." },
+      "body-large": { "displayName": "Body Large", "purpose": "Base for the cluster preview line (drawn at 20sp, 2sp tracking)." },
+      "body-medium": { "displayName": "Body Medium", "purpose": "Detail-row values on Logs." },
+      "body-small": { "displayName": "Body Small", "purpose": "Notes, disabled reasons, empty states, log lines." },
+      "label-large": { "displayName": "Label Large", "purpose": "Press-block and segmented-control faces, upper-case." },
+      "label-medium": { "displayName": "Label Medium", "purpose": "Tags, text actions, nav labels, status label, units; upper-case." },
+      "label-small": { "displayName": "Label Small", "purpose": "Typewritten box labels, timestamps, detail keys; upper-case." }
+    },
+    "shadows": [],
+    "rules": [
+      { "name": "rule-heavy", "value": "2.5dp solid #141414", "purpose": "Outer frame of every box, press block, nav separator, roll column separator." },
+      { "name": "rule-light", "value": "1.5dp solid #141414", "purpose": "Row and column separators inside a box; fuel cell outlines; scale marks." },
+      { "name": "press-inset", "value": "3dp", "purpose": "How far a pressed block's inked face sinks inside its rule." },
+      { "name": "min-touch", "value": "56dp", "purpose": "Minimum height of every tappable control." },
+      { "name": "distance-column", "value": "96dp minimum", "purpose": "Roadbook distance column; widened to fit 8888.8 at the NOW size plus 22dp." },
+      { "name": "tulip-column", "value": "84dp", "purpose": "Roadbook tulip column." }
+    ],
+    "motion": [
+      { "name": "motion-gate", "value": "Settings.Global.ANIMATOR_DURATION_SCALE != 0", "purpose": "rememberMotionEnabled(); every decorative motion below is skipped when false. Live trip distance still updates because it is data." },
+      { "name": "rolling-digits", "value": "slide 320ms FastOutSlowIn + fade 160ms, per changed digit, up when rising, down when falling", "purpose": "Speed, engine temperature and NOW distance change like an odometer." },
+      { "name": "temp-needle", "value": "tween 900ms FastOutSlowIn", "purpose": "4dp highlighter needle slides along the 40-120 °C scale to the reported temperature." },
+      { "name": "distance-ticks", "value": "12dp per 10 m, long tick per 100 m, driven by dead-reckoned trip", "purpose": "The roll's left strip scrolls at riding speed." },
+      { "name": "dead-reckoning", "value": "advance at reported speed inside the 0.1 km band, max 6 s extrapolation, ease up over ~350ms, never backwards, reset on >1 km drop", "purpose": "Keeps the NOW distance moving between 5-second frames without inventing distance." },
+      { "name": "tulip-flow", "value": "dash 9dp / gap 6.3dp, ~1 cycle/s at 40 km/h, scaled linearly with speed", "purpose": "The live Moving tulip's highlighter shaft flows with the bike; static dash when motion is off." },
+      { "name": "connect-breathe", "value": "alpha 1.0 to 0.25, 700ms FastOutSlowIn, reverse repeat", "purpose": "Status square breathes only while connecting." },
+      { "name": "press", "value": "inset spring damping 0.6 stiffness 1800; face colour tween 90ms; VirtualKey haptic", "purpose": "Press blocks flood with ink and sink 3dp." },
+      { "name": "new-row-swipe", "value": "highlighter 40% alpha sweep 520ms FastOutSlowIn, hold 1400ms, dry 900ms; newest row written within 4 s only", "purpose": "Marks a freshly logged roadbook row like a highlighter pass." },
+      { "name": "row-placement", "value": "LazyColumn animateItem()", "purpose": "Logged rows slide into place as new rows arrive." }
+    ],
+    "breakpoints": [
+      { "name": "portrait", "value": "Configuration.ORIENTATION_PORTRAIT", "purpose": "Single column, bottom NavigationBar." },
+      { "name": "landscape", "value": "Configuration.ORIENTATION_LANDSCAPE", "purpose": "Two columns (status + header 1, roll 1.15), NavigationRail behind a heavy rule." }
+    ],
+    "states": [
+      { "name": "offline", "treatment": "Empty ink status square; NOW row 'Offline' with Connect press block; header readings Soft Ink + STALE if last values exist." },
+      { "name": "connecting", "treatment": "Breathing highlighter square; NOW row 'Connecting' with paper Cancel block." },
+      { "name": "error", "treatment": "Ink square crossed in paper; NOW row 'Link failed' pointing to Logs; Try again block." },
+      { "name": "waiting", "treatment": "Linked but no frame yet: 'Linked' row, Connected tulip, distance '—'." },
+      { "name": "riding", "treatment": "NOW row in Highlighter Wash with NOW tag; flowing tulip; distance rolls." },
+      { "name": "stopped", "treatment": "NOW row in wash, Stopped tulip with highlighter bar." },
+      { "name": "stale", "treatment": "Readings Soft Ink, STALE tag in header, 'No data' row, age line turns Ink." },
+      { "name": "low-fuel", "treatment": "Two bars: LOW tag and highlighter cells. One bar or fewer: RESERVE tag and highlighter cells." },
+      { "name": "empty-roadbook", "treatment": "Body Small Soft Ink note under the NOW row." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Press Block (Highlight)",
+      "kind": "button",
+      "refersTo": "press-block-highlight",
+      "description": "The one action on a screen. Highlighter face in a heavy ink rule; floods ink and sinks 3dp on press.",
+      "html": "<button class=\"ds-press ds-press-hl\"><span class=\"ds-press-face\">CONNECT</span></button>",
+      "css": ".ds-press { display: block; width: 320px; height: 56px; padding: 0; border: 2.5px solid #141414; border-radius: 0; background: #ffffff; cursor: pointer; } .ds-press-face { display: flex; align-items: center; justify-content: center; height: 100%; margin: 0; font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 1px; color: #141414; transition: background 90ms, color 90ms, margin 120ms cubic-bezier(.3,1.6,.5,1); } .ds-press-hl .ds-press-face { background: #FF5A1F; } .ds-press:active .ds-press-face { margin: 3px; height: calc(100% - 6px); background: #141414; } .ds-press-hl:active .ds-press-face { color: #FF5A1F; } .ds-press:focus-visible { outline: 2.5px solid #FF5A1F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Press Block (Paper)",
+      "kind": "button",
+      "refersTo": "press-block-paper",
+      "description": "Every other pressable block (Cancel, Bluetooth settings). Paper face; floods ink with a paper label on press.",
+      "html": "<button class=\"ds-press2\"><span class=\"ds-press2-face\">BLUETOOTH SETTINGS</span></button>",
+      "css": ".ds-press2 { display: block; width: 320px; height: 56px; padding: 0; border: 2.5px solid #141414; border-radius: 0; background: #ffffff; cursor: pointer; } .ds-press2-face { display: flex; align-items: center; justify-content: center; height: 100%; font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 1px; color: #141414; background: #ffffff; transition: background 90ms, color 90ms, margin 120ms; } .ds-press2:active .ds-press2-face { margin: 3px; height: calc(100% - 6px); background: #141414; color: #ffffff; } .ds-press2:focus-visible { outline: 2.5px solid #FF5A1F; outline-offset: 2px; } .ds-press2:disabled { border-color: #D6D6D6; cursor: default; } .ds-press2:disabled .ds-press2-face { color: #575757; }"
+    },
+    {
+      "name": "Ink Field",
+      "kind": "input",
+      "refersTo": "ink-field",
+      "description": "Square outlined field, ink border, highlighter cursor, caps input.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Message</span><input class=\"ds-field-input\" placeholder=\"What should the cluster say?\" value=\"FUEL STOP\"></label>",
+      "css": ".ds-field { position: relative; display: block; width: 320px; } .ds-field-label { position: absolute; top: -8px; left: 12px; padding: 0 4px; background: #ffffff; font-family: 'Roboto Mono', monospace; font-size: 12px; color: #575757; } .ds-field-input { width: 100%; height: 56px; padding: 0 16px; border: 1px solid #141414; border-radius: 0; background: #ffffff; color: #141414; caret-color: #FF5A1F; font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 20px; text-transform: uppercase; } .ds-field-input::placeholder { color: #575757; text-transform: none; } .ds-field-input:focus { outline: none; border-width: 2px; } .ds-field:focus-within .ds-field-label { color: #141414; }"
+    },
+    {
+      "name": "Ink Segmented",
+      "kind": "chip",
+      "refersTo": "ink-segmented",
+      "description": "Ruled segmented choice; the chosen segment is inked solid.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\"><button class=\"ds-seg-opt ds-seg-on\" role=\"radio\" aria-checked=\"true\">KM · °C</button><button class=\"ds-seg-opt\" role=\"radio\" aria-checked=\"false\">MI · °F</button></div>",
+      "css": ".ds-seg { display: flex; width: 320px; border: 2.5px solid #141414; background: #ffffff; } .ds-seg-opt { flex: 1; height: 56px; border: 0; border-radius: 0; background: #ffffff; color: #141414; font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 1px; cursor: pointer; } .ds-seg-opt + .ds-seg-opt { border-left: 2.5px solid #141414; } .ds-seg-on { background: #141414; color: #ffffff; } .ds-seg-opt:focus-visible { outline: 2.5px solid #FF5A1F; outline-offset: -5px; }"
+    },
+    {
+      "name": "Tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Highlighter block with ink text, for live or warning status only.",
+      "html": "<span class=\"ds-tag\">NOW</span> <span class=\"ds-tag\">RESERVE</span>",
+      "css": ".ds-tag { display: inline-block; padding: 2px 6px; background: #FF5A1F; color: #141414; border-radius: 0; font-family: 'Roboto Mono', monospace; font-weight: 700; font-size: 12px; line-height: 16px; letter-spacing: 0.5px; }"
+    },
+    {
+      "name": "Navigation Bar",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Four tabs on paper behind a heavy rule; selected tab is a highlighter icon on an ink indicator.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-on\" href=\"#\"><span class=\"ds-nav-ind\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"12\" cy=\"19.7\" r=\"2.6\" fill=\"currentColor\" stroke=\"none\"/><path d=\"M12 18.7V3.8M7.2 8.2L12 2.9l4.8 5.3\"/></svg></span><span>RIDE</span></a><a class=\"ds-nav-item\" href=\"#\"><span class=\"ds-nav-ind\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><rect x=\"2.4\" y=\"5.3\" width=\"19.2\" height=\"12\"/><path d=\"M6.2 9.6h11.6M6.2 13.4h7.2\"/></svg></span><span>MESSAGE</span></a><a class=\"ds-nav-item\" href=\"#\"><span class=\"ds-nav-ind\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M2.4 5.8h2.9M8.2 5.8h13.4M2.4 12h2.9M8.2 12h13.4M2.4 18.2h2.9M8.2 18.2h6.7\"/></svg></span><span>LOGS</span></a></nav>",
+      "css": ".ds-nav { display: flex; width: 360px; background: #ffffff; border-top: 2.5px solid #141414; padding: 12px 0 16px; } .ds-nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #575757; text-decoration: none; font-family: 'Roboto Mono', monospace; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; } .ds-nav-ind { display: flex; align-items: center; justify-content: center; width: 64px; height: 32px; } .ds-nav-on { color: #141414; } .ds-nav-on .ds-nav-ind { background: #141414; color: #FF5A1F; } .ds-nav-item:hover .ds-nav-ind { outline: 1.5px solid #141414; } .ds-nav-item:focus-visible { outline: 2.5px solid #FF5A1F; }"
+    },
+    {
+      "name": "Header Box",
+      "kind": "card",
+      "refersTo": "ink-box",
+      "description": "Signature ruled header: speed at display size, engine with needle scale, fuel with six cells.",
+      "html": "<div class=\"ds-hdr\"><div class=\"ds-hdr-speed\"><span class=\"ds-lbl\">SPEED · KM/H</span><span class=\"ds-hdr-num\">42</span></div><div class=\"ds-hdr-side\"><div class=\"ds-hdr-cell\"><span class=\"ds-lbl\">ENGINE</span><span class=\"ds-hdr-read\">82<small> °C</small></span><div class=\"ds-scale\"><i style=\"left:52%\"></i></div></div><div class=\"ds-hdr-cell ds-hdr-fuel\"><span class=\"ds-lbl\">FUEL</span><span class=\"ds-hdr-read\">5/6</span><div class=\"ds-cells\"><b></b><b></b><b></b><b></b><b></b><b class=\"ds-empty\"></b></div></div></div></div>",
+      "css": ".ds-hdr { display: flex; width: 360px; border: 2.5px solid #141414; background: #ffffff; color: #141414; } .ds-hdr-speed { flex: 1.3; padding: 12px; border-right: 2.5px solid #141414; display: flex; flex-direction: column; } .ds-hdr-side { flex: 1; display: flex; flex-direction: column; } .ds-hdr-cell { padding: 12px; display: flex; flex-direction: column; gap: 4px; } .ds-hdr-fuel { border-top: 1.5px solid #141414; } .ds-lbl { font-family: 'Roboto Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 1px; color: #575757; } .ds-hdr-num { font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 112px; line-height: 104px; letter-spacing: -2px; font-variant-numeric: tabular-nums; } .ds-hdr-read { font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 34px; line-height: 36px; font-variant-numeric: tabular-nums; } .ds-hdr-read small { font-family: 'Roboto Mono', monospace; font-size: 12px; font-weight: 700; color: #575757; } .ds-scale { position: relative; height: 16px; border-bottom: 1.5px solid #141414; background: repeating-linear-gradient(90deg, #575757 0 1.5px, transparent 1.5px 12.5%) bottom/100% 50% no-repeat; } .ds-scale i { position: absolute; top: 0; width: 4px; height: 16px; background: #FF5A1F; transition: left 900ms cubic-bezier(.4,0,.2,1); } .ds-cells { display: flex; gap: 3px; } .ds-cells b { flex: 1; height: 12px; background: #141414; border: 1.5px solid #141414; } .ds-cells b.ds-empty { background: transparent; }"
+    },
+    {
+      "name": "Roadbook Row",
+      "kind": "custom",
+      "refersTo": "roadbook-row-now",
+      "description": "Signature three-column roll row: distance, tulip, note. The NOW row sits on the highlighter wash.",
+      "html": "<div class=\"ds-roll\"><div class=\"ds-ticks\"></div><div class=\"ds-rows\"><div class=\"ds-row ds-row-now\"><div class=\"ds-row-dist\"><span class=\"ds-row-km\">397.4</span><span class=\"ds-tag2\">NOW</span><span class=\"ds-lbl2\">TRIP A · KM</span></div><div class=\"ds-row-tulip\"><svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M32 53.8V14.1\" stroke=\"#FF5A1F\" stroke-width=\"3\" stroke-dasharray=\"9 6.3\"/><path d=\"M23 16.7l9-9 9 9\" stroke=\"#FF5A1F\" stroke-width=\"3\"/><circle cx=\"32\" cy=\"53.8\" r=\"5\" fill=\"#141414\"/></svg></div><div class=\"ds-row-note\"><span class=\"ds-row-title\">Riding</span><span class=\"ds-row-sub\">42 km/h · trip B 138.3 km</span></div></div><div class=\"ds-row\"><div class=\"ds-row-dist\"><span class=\"ds-row-km ds-row-km-sm\">396.8</span><span class=\"ds-lbl2\">08:41</span></div><div class=\"ds-row-tulip\"><svg width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" stroke=\"#141414\" stroke-width=\"3\" stroke-linecap=\"round\"><path d=\"M32 53.8V15.4\"/><path d=\"M17.9 15.4h28.2\" stroke-width=\"4.2\"/><circle cx=\"32\" cy=\"53.8\" r=\"5\" fill=\"#141414\" stroke=\"none\"/></svg></div><div class=\"ds-row-note\"><span class=\"ds-row-title ds-row-title-sm\">Stopped</span><span class=\"ds-row-sub\">Speed held at zero.</span></div></div></div></div>",
+      "css": ".ds-roll { display: flex; width: 360px; border: 2.5px solid #141414; background: #ffffff; color: #141414; } .ds-ticks { width: 16px; border-right: 2.5px solid #141414; background: repeating-linear-gradient(180deg, transparent 0 10.5px, #575757 10.5px 12px) right/55% 100% no-repeat; } .ds-rows { flex: 1; } .ds-row { display: flex; min-height: 88px; border-bottom: 1.5px solid #141414; } .ds-row-now { min-height: 104px; background: #FFF1EA; } .ds-row-dist { width: 96px; padding: 10px; display: flex; flex-direction: column; gap: 6px; border-right: 1.5px solid #141414; } .ds-row-km { font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 800; font-size: 28px; line-height: 28px; font-variant-numeric: tabular-nums; } .ds-row-km-sm { font-weight: 700; font-size: 24px; line-height: 26px; } .ds-tag2 { align-self: flex-start; padding: 2px 6px; background: #FF5A1F; color: #141414; font-family: 'Roboto Mono', monospace; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; } .ds-lbl2 { font-family: 'Roboto Mono', monospace; font-weight: 700; font-size: 11px; letter-spacing: 1px; color: #575757; } .ds-row-tulip { width: 84px; display: flex; align-items: center; justify-content: center; border-right: 1.5px solid #141414; } .ds-row-note { flex: 1; padding: 10px; display: flex; flex-direction: column; gap: 4px; } .ds-row-title { font-family: 'Saira Condensed', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 24px; line-height: 26px; } .ds-row-title-sm { font-size: 20px; line-height: 22px; } .ds-row-sub { font-family: 'Roboto Mono', monospace; font-weight: 500; font-size: 12px; line-height: 17px; color: #575757; }"
+    },
+    {
+      "name": "Cluster Preview",
+      "kind": "custom",
+      "refersTo": "cluster-preview",
+      "description": "The message as the cluster will read it: highlighter mono on an ink panel.",
+      "html": "<div class=\"ds-cluster\">FUEL STOP</div>",
+      "css": ".ds-cluster { width: 328px; padding: 14px 16px; background: #141414; color: #FF5A1F; font-family: 'Roboto Mono', monospace; font-weight: 500; font-size: 20px; line-height: 28px; letter-spacing: 2px; white-space: nowrap; overflow: hidden; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Roadbook Roll",
+    "overview": "The app is a rally roadbook: a white paper roll ruled in heavy ink, with one orange highlighter for whatever is live right now. Every reading sits in a ruled box and every event the bike reports becomes a numbered roadbook row (distance, tulip pictogram, note). Nothing floats, nothing is tinted grey, and nothing casts a shadow. Depth and emphasis come from three moves only: a heavier rule, an ink flood, or a highlighter mark.\n\nThe density is a navigator's: big condensed numerals packed into narrow boxes, small typewritten labels in the corners, and a strip of distance ticks running down the left edge of the roll. Motion is part of the system, and every moving part is driven by real telemetry: digits roll like an odometer, the temperature needle slides, the distance strip scrolls at 10 m per tick, the tulip arrow's dash flows with speed. When the system animator scale is 0, all of that stops. The live trip distance keeps updating because it is data, not decoration.\n\nThe ground is white because the rider asked for it and because it reads in sunlight. There is no dark scheme and no dynamic colour. The world was derived from the shipped Compose source; it has not been compiled or rendered on a device (no Android SDK was available), so rendered values such as Material's own indicator and switch shapes are unverified.",
+    "keyCharacteristics": [
+      "White roll paper, ink, and a single rally highlighter (#FF5A1F) that marks only what is live.",
+      "Square boxes framed in a 2.5dp heavy rule, divided by 1.5dp light rules.",
+      "Saira Condensed for numerals, titles and buttons; Roboto Mono for labels, units and notes.",
+      "Press blocks that flood with ink and sink 3dp inside their rule; no shadow anywhere.",
+      "Every animation is telemetry-driven and goes still when system animations are off.",
+      "Glove-sized controls: 56dp minimum for every tappable target."
+    ],
+    "rules": [
+      { "name": "The One Highlighter Rule", "body": "Orange means \"live right now\": the current row, the selected tab, the needle, the one action on a screen. If two things on a screen are orange for different reasons, one of them is wrong.", "section": "colors" },
+      { "name": "The Ink-On-Orange Rule", "body": "Text sitting on the highlighter is Ink, never white. On paper the highlighter is a fill or a mark, never text; on an ink ground (the cluster preview, a pressed highlight block's label) highlighter text is allowed at 5.9:1.", "section": "colors" },
+      { "name": "The Never-Colour-Alone Rule", "body": "Every state that uses orange also changes shape or words: the status square is filled, empty, breathing or crossed; low fuel adds a LOW or RESERVE tag; stale adds a STALE tag.", "section": "colors" },
+      { "name": "The Tabular Numeral Rule", "body": "Every number that changes while riding uses tabular figures (`tnum`), so rolling digits never shift their neighbours.", "section": "typography" },
+      { "name": "The Label Corner Rule", "body": "Upper-case is reserved for typewritten box labels, Tags, nav labels and button faces. Titles, notes and body text stay in sentence case.", "section": "typography" },
+      { "name": "The Ink-Flood Rule", "body": "Pressing is shown by ink, not light: the face floods with ink and sinks 3dp inside its rule. Nothing lifts, glows or casts a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** frame every reading or group in a square ink box with a 2.5dp outer rule and 1.5dp inner rules.",
+      "**Do** keep the highlighter (#FF5A1F) for what is live right now: the one action, the NOW row, the needle, the selected tab, warning tags.",
+      "**Do** put Ink text on highlighter fills, and pair every orange state with a shape or word change.",
+      "**Do** make every tappable control at least 56dp tall.",
+      "**Do** show presses as an ink flood plus a 3dp inset, with a haptic tick.",
+      "**Do** drive every animation from real telemetry, and check `rememberMotionEnabled()` so it goes still when the animator scale is 0. Live data, such as the dead-reckoned trip distance, keeps updating.",
+      "**Do** use tabular figures for any number that changes while riding.",
+      "**Do** show missing data as \"—\" and stale data in Soft Ink with a STALE tag, never faded below legibility."
+    ],
+    "donts": [
+      "**Don't** add a dark scheme, dynamic colour, or an off-white or grey surface; the white ground is a binding user brief.",
+      "**Don't** add shadows, tonal elevation or glows; press blocks show no ripple, only the ink flood.",
+      "**Don't** round the corners of boxes, blocks, fields, tags or segments. Pictograms keep their round caps and dots.",
+      "**Don't** set highlighter text on paper (3.1:1), or white text on highlighter.",
+      "**Don't** use Faint Ink (#D6D6D6) for any readable text.",
+      "**Don't** animate anything that is not backed by telemetry or a direct press.",
+      "**Don't** use a second accent hue or an icon library; icons are drawn in the tulip stroke."
+    ]
+  }
+}

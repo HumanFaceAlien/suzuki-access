@@ -22,6 +22,10 @@ fun formatOdometer(km: Int, unit: DistanceUnit): String = formatWhole((km * unit
 fun formatTrip(km: Double, unit: DistanceUnit): String =
     String.format(Locale.getDefault(), "%,.1f", km * unit.perKm)
 
+/** Trip distance without thousands grouping, for the roadbook's fixed-width distance column. */
+fun formatTripPlain(km: Double, unit: DistanceUnit): String =
+    String.format(Locale.getDefault(), "%.1f", km * unit.perKm)
+
 fun speedIn(unit: DistanceUnit, kmh: Int): Int = (kmh * unit.perKm).roundToInt()
 
 fun formatAge(ageMs: Long): String {

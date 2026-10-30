@@ -35,12 +35,11 @@ object SuzukiCommandPacket {
     /** Missed-call / notification text. Sibling of [SuzukiDisplaySender]'s '5', one char narrower. */
     const val COMMAND_NOTIFICATION_TEXT: Byte = '4'.code.toByte()
 
-    /**
-     * Turn-by-turn navigation. Only byte[1] holds the command ('1'); the APK's
-     * `"?110"` is a *template* whose bytes[2..3] are overwritten with the
-     * maneuver code and `0xFF`.
-     */
+    /** Turn-by-turn navigation (the official app's `a531`). */
     const val COMMAND_NAVIGATION: Byte = '1'.code.toByte()
+
+    /** Maneuver byte the official app sends when there is nothing to show. */
+    const val NO_MANEUVER: Int = 0x2E
 
     /**
      * Rider identity. The official app writes this right after enabling FFF2
@@ -133,52 +132,94 @@ object SuzukiCommandPacket {
     /**
      * Turn-by-turn navigation frame.
      *
-     * Field widths are taken from the APK's `"?110"` template. Only
-     * `distanceToManeuver` and `remainingDistance` are evidenced by their
-     * defaults (`"0000"` at `A0.java:485-486`); the widths of `fieldM`,
-     * `fieldN` and `fieldO` were **not** established, because the Mappls
-     * navigation callbacks that fill them did not decompile. They are passed
-     * through verbatim and the builder returns `null` if the result is not
-     * exactly 30 bytes, so a wrong assumption fails loudly instead of
-     * transmitting a malformed frame.
+     * ```
+     * [1]      '1'
+     * [2]      maneuver byte (cluster glyph, see nav/Maneuver.kt)
+     * [3]      0xFF
+     * [4..7]   distance to next maneuver, 4 ASCII chars ("0450", "01.2")
+     * [8]      its unit, 'M' or 'K'
+     * [9..14]  ETA, 6 ASCII chars: "00HHMM" (24 h) or "HHMMAM"/"HHMMPM" (12 h)
+     * [15..17] 0xFF
+     * [18..21] distance left on the route, 4 ASCII chars
+     * [22]     its unit, 'M' or 'K'
+     * [23]     status: '1' normal, '2' re-routing, '5' destination reached,
+     *          '0' exit; '0'/'2'/'4'/'6' make the cluster ignore byte 2
+     * [24]     '1' keep navigating, '0' end navigation
+     * [25..27] 0xFF
+     * ```
      *
-     * ```
-     * template = "?110" + distanceToManeuver + fieldM + fieldN + "000" +
-     *            remainingDistance + fieldO + gpsStatus + gpsStatus2 + "00000"
-     * [0]      0xA5         [2]      maneuverCode     [3] 0xFF
-     * [9]      0x20         (only on TFT editions, when fieldN starts with '0')
-     * [15..17] 0xFF         [25..27] 0xFF
-     * ```
+     * Layout from github.com/pushplekh/redline-suzuki-ride-connect-google-maps
+     * `NOTES.md` (Gixxer/Access, status digits photo-verified there); not yet
+     * confirmed on the V-STROM SX. Text fields are written as given, so callers
+     * use [formatDistance] and [formatEta].
      */
     fun buildNavigationPacket(
-        maneuverCode: Byte,
-        gpsStatus: Char,
-        gpsStatus2: Char,
-        distanceToManeuver: String = "0000",
-        fieldM: String = "000",
-        fieldN: String = "000",
-        remainingDistance: String = "0000",
-        fieldO: String = "00",
-        isTftEdition: Boolean = false,
+        maneuver: Int,
+        distanceToManeuver: String,
+        distanceToManeuverUnit: Char,
+        eta: String,
+        remainingDistance: String,
+        remainingDistanceUnit: Char,
+        status: Char = '1',
+        continueNavigation: Boolean = true,
         mode: SuzukiChecksum.Mode = SuzukiChecksum.Mode.PLAIN_SUM,
-    ): ByteArray? {
-        val template = "?110" + distanceToManeuver + fieldM + fieldN + "000" +
-            remainingDistance + fieldO + gpsStatus + gpsStatus2 + "00000"
-
-        if (template.length != PACKET_SIZE) return null
-
-        val packet = template.toByteArray(Charsets.US_ASCII).clone()
+    ): ByteArray {
+        val packet = ByteArray(PACKET_SIZE)
         packet[HEADER_INDEX] = HEADER_BYTE
-        packet[2] = maneuverCode
+        packet[COMMAND_INDEX] = COMMAND_NAVIGATION
+        packet[2] = (maneuver and 0xFF).toByte()
         packet[3] = 0xFF.toByte()
-        if (isTftEdition && fieldN.firstOrNull() == '0') {
-            packet[9] = 0x20
-        }
+        packet.writeField(4, 4, distanceToManeuver)
+        packet[8] = distanceToManeuverUnit.code.toByte()
+        packet.writeField(9, 6, eta)
         for (index in 15..17) packet[index] = 0xFF.toByte()
+        packet.writeField(18, 4, remainingDistance)
+        packet[22] = remainingDistanceUnit.code.toByte()
+        packet[23] = status.code.toByte()
+        packet[24] = (if (continueNavigation) '1' else '0').code.toByte()
         for (index in 25..27) packet[index] = 0xFF.toByte()
         packet[CHECKSUM_INDEX] = SuzukiChecksum.compute(packet, mode)
         packet[TERMINATOR_INDEX] = TERMINATOR_BYTE
         return packet
+    }
+
+    /** Frame that tells the cluster navigation has ended. */
+    fun buildNavigationEndPacket(mode: SuzukiChecksum.Mode = SuzukiChecksum.Mode.PLAIN_SUM): ByteArray =
+        buildNavigationPacket(
+            maneuver = NO_MANEUVER,
+            distanceToManeuver = "",
+            distanceToManeuverUnit = 'M',
+            eta = "",
+            remainingDistance = "",
+            remainingDistanceUnit = 'M',
+            status = '0',
+            continueNavigation = false,
+            mode = mode,
+        )
+
+    /**
+     * Distance as the cluster's 4-char field plus unit: under 1 km whole metres
+     * (`"0450" M`), under 100 km one decimal (`"01.2" K`), then whole km up to
+     * 9999. Unknown or negative distances are blank.
+     */
+    fun formatDistance(meters: Int?): Pair<String, Char> = when {
+        meters == null || meters < 0 -> "    " to 'M'
+        meters < 1_000 -> "%04d".format(java.util.Locale.ROOT, meters) to 'M'
+        meters < 99_950 -> "%04.1f".format(java.util.Locale.ROOT, meters / 1000.0) to 'K'
+        else -> "%04d".format(java.util.Locale.ROOT, minOf(9_999, Math.round(meters / 1000.0).toInt())) to 'K'
+    }
+
+    /** ETA as the cluster's 6-char field; blank when unknown. */
+    fun formatEta(time: java.time.LocalTime?, twelveHour: Boolean): String {
+        if (time == null) return "      "
+        if (!twelveHour) return "00%02d%02d".format(java.util.Locale.ROOT, time.hour, time.minute)
+        val hour12 = if (time.hour % 12 == 0) 12 else time.hour % 12
+        return "%02d%02d%s".format(java.util.Locale.ROOT, hour12, time.minute, if (time.hour < 12) "AM" else "PM")
+    }
+
+    private fun ByteArray.writeField(offset: Int, width: Int, value: String) {
+        val text = value.sanitizeVisible().take(width).padStart(width, ' ')
+        text.toByteArray(Charsets.US_ASCII).copyInto(this, destinationOffset = offset)
     }
 
     private fun String.sanitizeVisible(): String = buildString(length) {

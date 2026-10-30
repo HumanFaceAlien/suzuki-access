@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:390px;height:844px;overflow:hidden;background:#fff;color:#141414;font-family:Barlow,sans-serif}
+.top{display:flex;justify-content:space-between;align-items:center;padding:52px 20px 0}
+.logo{font:800 26px 'Barlow Condensed';letter-spacing:1px}
+.live{display:flex;align-items:center;gap:8px;font:600 13px Barlow}
+.live i{display:block;width:28px;height:0;border-top:2px solid #141414}
+.speed{padding:8px 20px 0;display:flex;align-items:flex-end;gap:10px}
+.speed b{font:800 196px/0.82 'Barlow Condensed';letter-spacing:-6px}
+.speed span{font:600 24px 'Barlow Condensed';padding-bottom:10px;letter-spacing:1px}
+.road{position:relative;height:150px;margin-top:18px;border-top:1px solid #141414;border-bottom:1px solid #141414;overflow:hidden}
+.lane{position:absolute;left:0;right:0;top:118px;border-top:2px dashed #141414}
+.stone{position:absolute;bottom:40px;width:74px;height:96px;background:#fff;border:2px solid #141414;border-radius:37px 37px 4px 4px;overflow:hidden;text-align:center}
+.stone .cap{height:40px;background:#ffc20e;border-bottom:2px solid #141414}
+.stone .n{font:800 24px/1 'Barlow Condensed';margin-top:10px}
+.stone .u{font:600 11px Barlow}
+.s1{left:-20px;transform:scale(.8);transform-origin:bottom left;opacity:.5}
+.s2{left:118px}
+.s3{left:290px;transform:scale(.8);transform-origin:bottom left}
+.trace{position:absolute;left:0;top:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #141414}
+.cell{padding:16px 20px;border-right:1px solid #141414}
+.cell:last-child{border-right:0}
+.lab{font:600 11px Barlow;letter-spacing:1.6px;text-transform:uppercase}
+.val{font:800 40px/1 'Barlow Condensed';margin-top:6px}
+.val small{font:600 18px 'Barlow Condensed'}
+.therm{margin-top:10px;height:8px;border:1.5px solid #141414;border-radius:4px;position:relative}
+.therm i{position:absolute;left:0;top:0;bottom:0;width:72%;background:#141414}
+.fuel{display:flex;gap:4px;margin-top:10px}
+.fuel i{flex:1;height:18px;border:1.5px solid #141414;border-radius:9px 9px 2px 2px;background:#fff}
+.fuel i.on{background:linear-gradient(#ffc20e 55%,#fff 55%)}
+.trips{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #141414}
+.btn{margin:22px 20px 0;position:relative;height:60px}
+.btn .face{position:absolute;inset:0 6px 6px 0;background:#ffc20e;border:2px solid #141414;display:flex;align-items:center;justify-content:center;font:800 22px 'Barlow Condensed';letter-spacing:1.5px}
+.btn .edge{position:absolute;inset:6px 0 0 6px;background:#141414}
+nav{position:absolute;bottom:0;left:0;right:0;height:72px;border-top:1px solid #141414;display:flex;justify-content:space-around;align-items:center;font:600 12px Barlow}
+nav b{border-bottom:2px solid #141414;padding-bottom:4px}
+</style></head><body>
+<div class="top"><div class="logo">SXV</div><div class="live"><i></i>Connected · 2s ago</div></div>
+<div class="speed"><b>42</b><span>KM/H</span></div>
+<div class="road">
+  <svg class="trace" width="390" height="60" viewBox="0 0 390 60"><polyline fill="none" stroke="#141414" stroke-width="1" points="0,52 30,50 60,44 90,30 120,26 150,28 180,40 210,52 240,52 270,38 300,22 330,16 360,18 390,20"/></svg>
+  <div class="stone s1"><div class="cap"></div><div class="n">12 335</div><div class="u">KM</div></div>
+  <div class="stone s2"><div class="cap"></div><div class="n">12 336</div><div class="u">KM</div></div>
+  <div class="stone s3"><div class="cap"></div><div class="n">12 337</div><div class="u">KM</div></div>
+  <div class="lane"></div>
+</div>
+<div class="grid">
+  <div class="cell"><div class="lab">Engine</div><div class="val">82<small> °C</small></div><div class="therm"><i></i></div></div>
+  <div class="cell"><div class="lab">Fuel · ≈10 L</div><div class="val">5<small>/6</small></div><div class="fuel"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div></div>
+</div>
+<div class="trips">
+  <div class="cell"><div class="lab">Trip A</div><div class="val">397.4<small> km</small></div></div>
+  <div class="cell"><div class="lab">Trip B</div><div class="val">138.3<small> km</small></div></div>
+</div>
+<div class="btn"><div class="edge"></div><div class="face">SEND TO CLUSTER</div></div>
+<nav><b>Ride</b><span>Message</span><span>Logs</span><span>Settings</span></nav>
+</body></html>

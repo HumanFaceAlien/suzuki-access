@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:390px;height:844px;overflow:hidden;background:#fff;color:#141414;font-family:'Roboto Mono',monospace}
+.head{display:grid;grid-template-columns:1.4fr 1fr;margin:50px 16px 0;border:2.5px solid #141414}
+.box{padding:10px 12px;border-right:2.5px solid #141414}
+.box:last-child{border-right:0}
+.lab{font:700 10px 'Roboto Mono';letter-spacing:1px}
+.big{font:800 108px/0.9 'Saira Condensed';letter-spacing:-3px}
+.big small{font:600 22px 'Saira Condensed';letter-spacing:0}
+.mid{font:800 40px/1 'Saira Condensed'}
+.mid small{font:600 16px 'Saira Condensed'}
+.side{display:flex;flex-direction:column;justify-content:space-between}
+.side .row{padding:8px 0;border-bottom:1.5px solid #141414}
+.side .row:last-child{border:0}
+.hl{background:#ff5a1f;color:#fff;padding:0 4px}
+.roll{margin:14px 16px 0;border:2.5px solid #141414;height:470px;position:relative;overflow:hidden}
+.r{display:grid;grid-template-columns:92px 96px 1fr;border-bottom:1.5px solid #141414;height:94px}
+.r>div{border-right:1.5px solid #141414;padding:8px}
+.r>div:last-child{border-right:0}
+.km{font:800 30px/1 'Saira Condensed'}
+.km small{display:block;font:500 11px 'Roboto Mono';margin-top:4px}
+.note{font:500 12px/1.4 'Roboto Mono'}
+.note b{display:block;font:800 22px/1.1 'Saira Condensed'}
+.now{background:#fff6f1}
+.now .km{color:#ff5a1f}
+.fade{position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,#fff)}
+nav{position:absolute;bottom:0;left:0;right:0;height:72px;border-top:2.5px solid #141414;display:flex;justify-content:space-around;align-items:center;font:700 12px 'Roboto Mono'}
+nav b{background:#141414;color:#fff;padding:6px 10px}
+</style></head><body>
+<div class="head">
+  <div class="box"><div class="lab">SPEED · KM/H</div><div class="big">42</div></div>
+  <div class="box side">
+    <div class="row"><div class="lab">ENGINE</div><div class="mid">82<small> °C</small></div></div>
+    <div class="row"><div class="lab">FUEL</div><div class="mid">5/6 <small><span class="hl">≈10 L</span></small></div></div>
+  </div>
+</div>
+<div class="roll">
+  <div class="r now"><div><div class="km">397.4</div><small>NOW</small></div><div>
+    <svg width="78" height="76" viewBox="0 0 78 76"><circle cx="39" cy="64" r="6" fill="#141414"/><path d="M39 64 V14" stroke="#ff5a1f" stroke-width="5"/><path d="M27 26 L39 10 L51 26" fill="none" stroke="#ff5a1f" stroke-width="5"/></svg>
+  </div><div class="note"><b>Riding</b>42 km/h · trip B 138.3</div></div>
+  <div class="r"><div><div class="km">396.1</div><small>08:51</small></div><div>
+    <svg width="78" height="76" viewBox="0 0 78 76"><path d="M10 60 H68" stroke="#141414" stroke-width="3"/><path d="M20 60 V30 M58 60 V22" stroke="#141414" stroke-width="3"/></svg>
+  </div><div class="note"><b>Warmed up</b>engine reached 80 °C</div></div>
+  <div class="r"><div><div class="km">395.0</div><small>08:49</small></div><div>
+    <svg width="78" height="76" viewBox="0 0 78 76"><rect x="16" y="24" width="46" height="30" fill="none" stroke="#141414" stroke-width="3"/><path d="M28 38 h22" stroke="#141414" stroke-width="3"/></svg>
+  </div><div class="note"><b>Message sent</b>“HI | HI” to cluster</div></div>
+  <div class="r"><div><div class="km">395.0</div><small>08:48</small></div><div>
+    <svg width="78" height="76" viewBox="0 0 78 76"><circle cx="39" cy="38" r="20" fill="none" stroke="#141414" stroke-width="3"/><circle cx="39" cy="38" r="6" fill="#141414"/></svg>
+  </div><div class="note"><b>Connected</b>SBM01xxxxxx</div></div>
+  <div class="r"><div><div class="km">395.0</div><small>08:47</small></div><div></div><div class="note"><b>Start</b>odometer 12,334 km</div></div>
+  <div class="fade"></div>
+</div>
+<nav><b>RIDE</b><span>MESSAGE</span><span>LOGS</span><span>SETTINGS</span></nav>
+</body></html>

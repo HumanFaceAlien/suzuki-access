@@ -59,6 +59,7 @@ class BleManager(
     private var telemetrySeen = false
     private var identityAttempts = 0
     private var identityWritePending = false
+    private var quietWritePending = false
     private val rejectedAddresses = mutableSetOf<String>()
     private var scanCandidate: BluetoothDevice? = null
     private val identityWatchdog = Runnable {
@@ -383,6 +384,25 @@ class BleManager(
         return sent
     }
 
+    /**
+     * Writes a prebuilt frame (navigation) to FFF1. Shares the one-write-at-a-time
+     * slot with display messages and returns false, without logging, when the slot
+     * is busy; the caller resends on its next tick. Only failures reach the log.
+     */
+    @SuppressLint("MissingPermission")
+    fun sendFrame(packet: ByteArray): Boolean {
+        val activeGatt = gatt ?: return false
+        val channelMap = viewModel.currentClusterChannelMap() ?: return false
+        val now = SystemClock.elapsedRealtime()
+        if (writeInFlightSince != 0L && now - writeInFlightSince < WRITE_TIMEOUT_MS) return false
+        val sent = SuzukiDisplaySender.sendPacket(activeGatt, channelMap.writeCharacteristic, packet)
+        if (sent) {
+            writeInFlightSince = now
+            quietWritePending = true
+        }
+        return sent
+    }
+
     private val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
@@ -417,6 +437,7 @@ class BleManager(
                 handler.removeCallbacks(verboseReadTimeout)
                 handler.removeCallbacks(identityWatchdog)
                 identityWritePending = false
+                quietWritePending = false
                 viewModel.vtrace(
                     "Disconnect status=$status (8=supervision timeout, 19=peer terminated, 22=local terminated, 133=generic error)"
                 )
@@ -531,6 +552,9 @@ class BleManager(
                 viewModel.trace("Identity write completed status=$status")
                 // The sweep's reads would collide with the identity write, so it starts after.
                 if (identityAttempts == 1) startVerboseDiagnostics(gatt)
+            } else if (quietWritePending) {
+                quietWritePending = false
+                if (status != BluetoothGatt.GATT_SUCCESS) viewModel.trace("Navigation write failed status=$status")
             } else {
                 viewModel.trace("Cluster write completed status=$status")
             }

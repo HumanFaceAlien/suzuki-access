@@ -1,6 +1,8 @@
 package com.adithyapaib.sxv.ui
 
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -42,11 +44,16 @@ import com.adithyapaib.sxv.ui.screens.DashboardScreen
 import com.adithyapaib.sxv.ui.screens.LogsScreen
 import com.adithyapaib.sxv.ui.screens.MessageScreen
 import com.adithyapaib.sxv.ui.screens.SettingsScreen
-import com.adithyapaib.sxv.ui.theme.Bg
-import com.adithyapaib.sxv.ui.theme.SurfaceCard
-import com.adithyapaib.sxv.ui.theme.SurfaceRaised
-import com.adithyapaib.sxv.ui.theme.TextPrimary
-import com.adithyapaib.sxv.ui.theme.TextSecondary
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import com.adithyapaib.sxv.ui.components.HRule
+import com.adithyapaib.sxv.ui.components.VRule
+import com.adithyapaib.sxv.ui.theme.Dimens
+import com.adithyapaib.sxv.ui.theme.Highlight
+import com.adithyapaib.sxv.ui.theme.Ink
+import com.adithyapaib.sxv.ui.theme.InkSoft
+import com.adithyapaib.sxv.ui.theme.Paper
 import kotlinx.coroutines.launch
 
 @Composable
@@ -59,6 +66,7 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
     val displayInput by viewModel.displayInput.collectAsStateWithLifecycle()
     val displaySecondaryInput by viewModel.displaySecondaryInput.collectAsStateWithLifecycle()
     val isSending by viewModel.isSendingDisplayText.collectAsStateWithLifecycle()
+    val roadbook by viewModel.roadbook.collectAsStateWithLifecycle()
     val unit by settings.unit.collectAsStateWithLifecycle()
     val keepScreenOn by settings.keepScreenOn.collectAsStateWithLifecycle()
     val recentMessages by settings.recentMessages.collectAsStateWithLifecycle()
@@ -104,26 +112,42 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
         onDispose { view.keepScreenOn = false }
     }
 
+    // Selected tab: highlighter mark on an inked indicator, the same "live" signal the roll uses.
+    val tabIcon: @Composable (AppTab, Boolean) -> Unit = { tab, selected ->
+        TabIcon(tab, tint = if (selected) Highlight else InkSoft)
+    }
+    val tabLabel: @Composable (AppTab) -> Unit = { tab ->
+        Text(tab.label.uppercase(), style = MaterialTheme.typography.labelMedium)
+    }
+
+    // Material navigation-bar behaviour: Back from another tab returns to Ride before leaving the app.
+    BackHandler(enabled = selectedTab != 0) { selectedTab = 0 }
+
     Scaffold(
-        containerColor = Bg,
+        containerColor = Paper,
+        // safeDrawing adds the display cutout, so the landscape rail never sits under it.
+        contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             if (!landscape) {
-                NavigationBar(containerColor = SurfaceCard) {
-                    AppTab.entries.forEachIndexed { index, tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            icon = { TabIcon(tab, tint = if (selectedTab == index) TextPrimary else TextSecondary) },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = TextPrimary,
-                                selectedTextColor = TextPrimary,
-                                unselectedIconColor = TextSecondary,
-                                unselectedTextColor = TextSecondary,
-                                indicatorColor = SurfaceRaised
+                Column {
+                    HRule(thickness = Dimens.RuleHeavy)
+                    NavigationBar(containerColor = Paper, tonalElevation = 0.dp) {
+                        AppTab.entries.forEachIndexed { index, tab ->
+                            NavigationBarItem(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                icon = { tabIcon(tab, selectedTab == index) },
+                                label = { tabLabel(tab) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = Highlight,
+                                    selectedTextColor = Ink,
+                                    unselectedIconColor = InkSoft,
+                                    unselectedTextColor = InkSoft,
+                                    indicatorColor = Ink
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -131,23 +155,24 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
     ) { inner ->
         Row(Modifier.padding(inner).consumeWindowInsets(inner)) {
             if (landscape) {
-                NavigationRail(containerColor = SurfaceCard, windowInsets = WindowInsets(0, 0, 0, 0)) {
+                NavigationRail(containerColor = Paper, windowInsets = WindowInsets(0, 0, 0, 0)) {
                     AppTab.entries.forEachIndexed { index, tab ->
                         NavigationRailItem(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
-                            icon = { TabIcon(tab, tint = if (selectedTab == index) TextPrimary else TextSecondary) },
-                            label = { Text(tab.label) },
+                            icon = { tabIcon(tab, selectedTab == index) },
+                            label = { tabLabel(tab) },
                             colors = NavigationRailItemDefaults.colors(
-                                selectedIconColor = TextPrimary,
-                                selectedTextColor = TextPrimary,
-                                unselectedIconColor = TextSecondary,
-                                unselectedTextColor = TextSecondary,
-                                indicatorColor = SurfaceRaised
+                                selectedIconColor = Highlight,
+                                selectedTextColor = Ink,
+                                unselectedIconColor = InkSoft,
+                                unselectedTextColor = InkSoft,
+                                indicatorColor = Ink
                             )
                         )
                     }
                 }
+                VRule(thickness = Dimens.RuleHeavy)
             }
             Box(Modifier.weight(1f).fillMaxHeight().imePadding()) {
                 when (AppTab.entries[selectedTab]) {
@@ -155,6 +180,7 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
                         connectionState = connectionState,
                         telemetry = telemetry,
                         lastUpdateMs = lastUpdateMs,
+                        roadbook = roadbook,
                         unit = unit,
                         onConnect = viewModel::connect,
                         onDisconnect = viewModel::disconnect
@@ -182,7 +208,13 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
                         unit = unit,
                         keepScreenOn = keepScreenOn,
                         onUnitChange = settings::setUnit,
-                        onKeepScreenOnChange = settings::setKeepScreenOn
+                        onKeepScreenOnChange = settings::setKeepScreenOn,
+                        navigationSection = {
+                            com.adithyapaib.sxv.ui.screens.NavigationSection(
+                                navigation = viewModel.navigation,
+                                connected = connectionState == com.adithyapaib.sxv.ble.BleConnectionState.CONNECTED
+                            )
+                        }
                     )
                 }
             }
