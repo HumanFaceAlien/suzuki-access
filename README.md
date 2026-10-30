@@ -1,9 +1,9 @@
 # SXV — V-Strom instrument link
 
 An Android companion app for the Suzuki V-Strom SX. It connects over Bluetooth LE to the
-bike's instrument cluster, shows live ride data, and can send short text messages to the
-cluster's dot-matrix display. It talks to the cluster directly and does not use the
-official Suzuki Ride Connect app.
+bike's instrument cluster, shows live ride data, and sends Google Maps turn-by-turn
+directions to the cluster. It talks to the cluster directly and does not use the official
+Suzuki Ride Connect app.
 
 Protocol details and reverse-engineering notes are in [FINDINGS.md](FINDINGS.md).
 
@@ -11,15 +11,16 @@ Protocol details and reverse-engineering notes are in [FINDINGS.md](FINDINGS.md)
 
 | Tab | What it does |
 |---|---|
-| Ride | Status line, a ruled header (speed, engine temperature with a sliding needle, six fuel cells) and the roadbook roll: a live "Now" row plus every event of the ride (start, connected, warmed up, stopped, riding again, fuel down, message sent, link lost) at the trip distance it happened. Readings dim when data goes stale. |
-| Message | Two-line message composer with a live counter, quick messages (Fuel stop, Lunch, Follow me), a preview of the cluster line, and recent messages. |
+| Ride | Status line, a ruled header (speed, engine temperature with a sliding needle, six fuel cells) and the roadbook roll: a live "Now" row plus every event of the ride (start, connected, warmed up, stopped, riding again, fuel down, link lost) at the trip distance it happened. Readings dim when data goes stale. |
+| Fuel | Fill-up log (litres, total cost, odometer prefilled from the bike, full tank or top-up). Economy measured full tank to full tank, cost per km, this month's spend and average price per litre; a line chart of economy per full tank and a column chart of spend per month. When the fuel bars jump up by two or more, it asks you to log the fill-up. **Fuel left and range:** counted down from your last full tank at your recent full-to-full economy; each time the gauge steps down, SXV learns what that bar really means on your bike and re-anchors the estimate there, so error doesn't build up. Shown with an honest ± and what it is counted from, a tank gauge with the learned bar levels, a fuel-left chart since the last full tank, and on the Ride header ("FUEL · ≈ 260 KM"). One low-range alert per tank at 40 km, with a "Nearest pump" shortcut. Tank size defaults to 12 L until you set yours. |
+| Service | Maintenance reminders counted down from the bike's own odometer and/or the calendar (oil, chain, brakes, service…). Quick-add templates with typical starting intervals to edit, a ruled meter per item that turns highlighter when due soon or overdue, "Done at 12,336 km", a badge on the tab, and one notification when an item becomes due soon and again when due. |
 | Logs | Connection details (state, last frame, FFF0/FFF1/FFF2), the BLE activity trace, a verbose-logging switch, copy and clear. |
-| Settings | Units (km/°C or mi/°F), keep screen on while connected, shortcut to system Bluetooth settings. |
+| Settings | Rider name for the cluster's welcome greeting, Google Maps navigation on the cluster (switch, notification access, arrow tester), units (km/°C or mi/°F), keep screen on while connected, shortcut to system Bluetooth settings. |
 
 Moving parts, all driven by real telemetry: digits that roll like an odometer, trip
 distance advancing between frames at the reported speed, a distance strip that scrolls one
 tick per 10 m, and a roadbook arrow that flows faster the faster you ride. Also: press-down
-buttons with a key tick, haptics on message sent or failed and when the connection drops, a
+buttons with a key tick, a haptic buzz when the connection drops, a
 landscape layout with a navigation rail for handlebar mounts, and errors as snackbars.
 
 ## Data from the cluster
@@ -40,13 +41,11 @@ frame layout, checksum rules and captured data.
 
 ## Known issues
 
-- **Display writes are unconfirmed.** Writes to FFF1 are accepted by Android, but the
-  cluster display has not been seen to update. The `'5'` packet layout may be shifted by one
-  byte, or the cluster may need a handshake or bonding. The Logs tab now records the write
-  completion status and FFF1 properties and bond state to find out which. See FINDINGS.md §8.
-- **Not built or tested on a device in the latest session.** The UI redesign, temperature
-  card and verbose logging were written without a JDK or Android SDK on hand. Build and run
-  before relying on them.
+- **Navigation arrows are unconfirmed on the V-Strom SX.** The maneuver bytes come from the
+  official app's table for other models; use the arrow tester in Settings to check them.
+- **Not built or tested on a device in the latest session.** The UI redesign, identity
+  handshake and Google Maps navigation were written without an Android SDK on hand. Build
+  and run before relying on them.
 
 ## Build
 
@@ -68,12 +67,14 @@ permissions on first launch.
 app/src/main/java/com/adithyapaib/sxv/
   MainActivity.kt          permissions, Bluetooth state receiver, hosts SxvApp
   ble/                     BleManager (scan, GATT, writes), BleViewModel (state),
-                           SuzukiPacketParser, SuzukiDisplaySender, SuzukiCommandPacket,
+                           SuzukiPacketParser, ClusterWriter, SuzukiCommandPacket,
                            SuzukiChecksum, VStromTelemetry
+  nav/                     Google Maps notification listener, parser, maneuver table,
+                           NavigationController (sends nav frames)
   ride/Roadbook.kt         turns telemetry and link changes into roadbook events
-  settings/AppSettings.kt  units, keep-screen-on, recent messages (SharedPreferences)
+  settings/AppSettings.kt  units, keep-screen-on, rider name (SharedPreferences)
   ui/SxvApp.kt             tab shell, haptics, keep-screen-on, snackbars
-  ui/screens/              Ride (DashboardScreen), Message, Logs, Settings
+  ui/screens/              Ride (DashboardScreen), Logs, Settings (+ NavigationSection)
   ui/components/           roadbook primitives (ruled boxes, press blocks, rolling digits),
                            header box and roll, tulip diagrams, drawn tab icons
   ui/theme/                colour, type and spacing tokens

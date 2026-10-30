@@ -64,6 +64,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.adithyapaib.sxv.ble.BleConnectionState
@@ -292,7 +293,10 @@ fun InkField(
     hint: String,
     modifier: Modifier = Modifier,
     imeAction: ImeAction = ImeAction.Next,
-    onImeAction: () -> Unit = {}
+    onImeAction: () -> Unit = {},
+    keyboardType: KeyboardType = KeyboardType.Text,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.Characters,
+    error: String? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -302,7 +306,13 @@ fun InkField(
         placeholder = { Text(hint) },
         singleLine = true,
         textStyle = MaterialTheme.typography.titleMedium,
-        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = imeAction),
+        keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = keyboardType, imeAction = imeAction),
+        isError = error != null,
+        supportingText = if (error != null) {
+            { Text(error) }
+        } else {
+            null
+        },
         keyboardActions = KeyboardActions(onDone = { onImeAction() }, onSend = { onImeAction() }),
         shape = RectangleShape,
         colors = OutlinedTextFieldDefaults.colors(
@@ -316,7 +326,14 @@ fun InkField(
             unfocusedLabelColor = InkSoft,
             cursorColor = Highlight,
             focusedPlaceholderColor = InkSoft,
-            unfocusedPlaceholderColor = InkSoft
+            unfocusedPlaceholderColor = InkSoft,
+            // Errors are said in words under the field; the field stays ink, with a paper fill.
+            errorContainerColor = Paper,
+            errorBorderColor = Ink,
+            errorLabelColor = Ink,
+            errorSupportingTextColor = Ink,
+            errorCursorColor = Highlight,
+            errorTextColor = Ink
         )
     )
 }

@@ -11,7 +11,6 @@ enum class RoadbookEvent {
     STOPPED,
     MOVING,
     FUEL_DROP,
-    MESSAGE_SENT,
     LINK_LOST
 }
 
@@ -27,8 +26,7 @@ data class RoadbookEntry(
     val odometerKm: Int? = null,
     val engineTempC: Int? = null,
     val fuelBars: Int? = null,
-    val speedKmh: Int? = null,
-    val message: String? = null
+    val speedKmh: Int? = null
 )
 
 /**
@@ -111,22 +109,16 @@ class RoadbookRecorder(private val clock: () -> Long = System::currentTimeMillis
         return entries
     }
 
-    fun onMessageSent(text: String): List<RoadbookEntry> {
-        add(RoadbookEvent.MESSAGE_SENT, lastTripKm, message = text)
-        return entries
-    }
-
     private fun add(
         event: RoadbookEvent,
         tripKm: Double?,
         odometerKm: Int? = null,
         engineTempC: Int? = null,
         fuelBars: Int? = null,
-        speedKmh: Int? = null,
-        message: String? = null
+        speedKmh: Int? = null
     ) {
         rows.addFirst(
-            RoadbookEntry(nextId++, event, clock(), tripKm, odometerKm, engineTempC, fuelBars, speedKmh, message)
+            RoadbookEntry(nextId++, event, clock(), tripKm, odometerKm, engineTempC, fuelBars, speedKmh)
         )
         while (rows.size > MAX_ROWS) rows.removeLast()
     }

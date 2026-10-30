@@ -42,7 +42,6 @@ import com.adithyapaib.sxv.ui.components.AppTab
 import com.adithyapaib.sxv.ui.components.TabIcon
 import com.adithyapaib.sxv.ui.screens.DashboardScreen
 import com.adithyapaib.sxv.ui.screens.LogsScreen
-import com.adithyapaib.sxv.ui.screens.MessageScreen
 import com.adithyapaib.sxv.ui.screens.SettingsScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -54,22 +53,44 @@ import com.adithyapaib.sxv.ui.theme.Highlight
 import com.adithyapaib.sxv.ui.theme.Ink
 import com.adithyapaib.sxv.ui.theme.InkSoft
 import com.adithyapaib.sxv.ui.theme.Paper
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.adithyapaib.sxv.garage.DueState
+import com.adithyapaib.sxv.garage.GarageViewModel
+import com.adithyapaib.sxv.ui.screens.FuelScreen
+import com.adithyapaib.sxv.ui.screens.ServiceScreen
 import kotlinx.coroutines.launch
 
 @Composable
-fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
+fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageViewModel) {
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val telemetry by viewModel.telemetry.collectAsStateWithLifecycle()
     val lastUpdateMs by viewModel.lastTelemetryAtMs.collectAsStateWithLifecycle()
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val verbose by viewModel.verbose.collectAsStateWithLifecycle()
-    val displayInput by viewModel.displayInput.collectAsStateWithLifecycle()
-    val displaySecondaryInput by viewModel.displaySecondaryInput.collectAsStateWithLifecycle()
-    val isSending by viewModel.isSendingDisplayText.collectAsStateWithLifecycle()
     val roadbook by viewModel.roadbook.collectAsStateWithLifecycle()
     val unit by settings.unit.collectAsStateWithLifecycle()
     val keepScreenOn by settings.keepScreenOn.collectAsStateWithLifecycle()
-    val recentMessages by settings.recentMessages.collectAsStateWithLifecycle()
+    val fuelRecords by garage.fuel.collectAsStateWithLifecycle()
+    val serviceStatuses by garage.service.collectAsStateWithLifecycle()
+    val lastOdometerKm by garage.odometerKm.collectAsStateWithLifecycle()
+    val fillUpPrompt by garage.fillUpPrompt.collectAsStateWithLifecycle()
+    val fuelEstimate by garage.estimate.collectAsStateWithLifecycle()
+    val tankLitres by garage.tankLitres.collectAsStateWithLifecycle()
+    val serviceDue = serviceStatuses.count { it.state == DueState.Due || it.state == DueState.Soon }
+
+    // The garage counts down from the bike's own odometer and watches the fuel bars for fill-ups.
+    LaunchedEffect(telemetry) { telemetry?.let(garage::onTelemetry) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { garage.refresh() }
+    val riderName by settings.riderName.collectAsStateWithLifecycle()
+    val pairedBike by viewModel.pairedBike.collectAsStateWithLifecycle()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
@@ -82,18 +103,6 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
         viewModel.errors.collect { message ->
             snackbar.currentSnackbarData?.dismiss()
             launch { snackbar.showSnackbar(message) }
-        }
-    }
-
-    // Haptic confirmation (or rejection) for each display write, and remember what was sent.
-    LaunchedEffect(viewModel) {
-        viewModel.sendResults.collect { result ->
-            if (result.success) {
-                haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                settings.addRecentMessage(result.message)
-            } else {
-                haptics.performHapticFeedback(HapticFeedbackType.Reject)
-            }
         }
     }
 
@@ -114,7 +123,23 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
 
     // Selected tab: highlighter mark on an inked indicator, the same "live" signal the roll uses.
     val tabIcon: @Composable (AppTab, Boolean) -> Unit = { tab, selected ->
-        TabIcon(tab, tint = if (selected) Highlight else InkSoft)
+        val due = tab == AppTab.Service && serviceDue > 0
+        Box(
+            if (due) Modifier.semantics { contentDescription = "$serviceDue service ${if (serviceDue == 1) "item" else "items"} due" } else Modifier
+        ) {
+            TabIcon(tab, tint = if (selected) Highlight else InkSoft)
+            // A square highlighter mark, like the roll's live mark, when something needs doing.
+            if (due) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-3).dp)
+                        .size(9.dp)
+                        .background(Highlight)
+                        .border(1.5.dp, Ink)
+                )
+            }
+        }
     }
     val tabLabel: @Composable (AppTab) -> Unit = { tab ->
         Text(tab.label.uppercase(), style = MaterialTheme.typography.labelMedium)
@@ -183,18 +208,28 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
                         roadbook = roadbook,
                         unit = unit,
                         onConnect = viewModel::connect,
-                        onDisconnect = viewModel::disconnect
+                        onDisconnect = viewModel::disconnect,
+                        fuelEstimate = fuelEstimate
                     )
-                    AppTab.Message -> MessageScreen(
-                        connectionState = connectionState,
-                        primary = displayInput,
-                        secondary = displaySecondaryInput,
-                        isSending = isSending,
-                        recentMessages = recentMessages,
-                        onPrimaryChange = viewModel::updateDisplayInput,
-                        onSecondaryChange = viewModel::updateDisplaySecondaryInput,
-                        onSend = viewModel::sendDisplayText,
-                        onClearRecent = settings::clearRecentMessages
+                    AppTab.Fuel -> FuelScreen(
+                        records = fuelRecords,
+                        odometerKm = lastOdometerKm,
+                        unit = unit,
+                        prompt = fillUpPrompt,
+                        onAdd = garage::addFuel,
+                        onDelete = garage::deleteFuel,
+                        onDismissPrompt = garage::dismissFillUp,
+                        estimate = fuelEstimate,
+                        tankSetting = tankLitres,
+                        onTankChange = garage::setTankLitres
+                    )
+                    AppTab.Service -> ServiceScreen(
+                        statuses = serviceStatuses,
+                        odometerKm = lastOdometerKm,
+                        connected = connectionState == BleConnectionState.CONNECTED,
+                        onAdd = garage::addItem,
+                        onMarkDone = garage::markDone,
+                        onDelete = garage::deleteItem
                     )
                     AppTab.Logs -> LogsScreen(
                         connectionState = connectionState,
@@ -207,8 +242,12 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel) {
                     AppTab.Settings -> SettingsScreen(
                         unit = unit,
                         keepScreenOn = keepScreenOn,
+                        riderName = riderName,
                         onUnitChange = settings::setUnit,
                         onKeepScreenOnChange = settings::setKeepScreenOn,
+                        onRiderNameChange = settings::setRiderName,
+                        pairedBike = pairedBike,
+                        onForgetBike = viewModel::forgetBike,
                         navigationSection = {
                             com.adithyapaib.sxv.ui.screens.NavigationSection(
                                 navigation = viewModel.navigation,

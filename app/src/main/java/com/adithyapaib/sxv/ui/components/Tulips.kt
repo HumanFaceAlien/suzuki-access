@@ -24,7 +24,7 @@ import com.adithyapaib.sxv.ui.theme.Highlight
 import com.adithyapaib.sxv.ui.theme.Ink
 
 /** The roadbook's pictograms. A dot is where you are; the stroke above it is what happened. */
-enum class TulipKind { Start, Connected, WarmedUp, Stopped, Moving, FuelDrop, Message, LinkLost, Offline }
+enum class TulipKind { Start, Connected, WarmedUp, Stopped, Moving, FuelDrop, LinkLost, Offline }
 
 fun RoadbookEvent.tulip(): TulipKind = when (this) {
     RoadbookEvent.START -> TulipKind.Start
@@ -33,7 +33,6 @@ fun RoadbookEvent.tulip(): TulipKind = when (this) {
     RoadbookEvent.STOPPED -> TulipKind.Stopped
     RoadbookEvent.MOVING -> TulipKind.Moving
     RoadbookEvent.FUEL_DROP -> TulipKind.FuelDrop
-    RoadbookEvent.MESSAGE_SENT -> TulipKind.Message
     RoadbookEvent.LINK_LOST -> TulipKind.LinkLost
 }
 
@@ -122,11 +121,6 @@ fun Tulip(kind: TulipKind, modifier: Modifier = Modifier, live: Boolean = false,
                 }
                 drawPath(hose, Ink, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 drawCircle(accent, w * 0.05f, Offset(w * 0.72f, w * 0.78f))
-            }
-            TulipKind.Message -> {
-                drawRect(Ink, topLeft = Offset(w * 0.16f, w * 0.26f), size = Size(w * 0.68f, w * 0.4f), style = Stroke(stroke))
-                drawLine(accent, Offset(w * 0.28f, w * 0.4f), Offset(w * 0.72f, w * 0.4f), stroke, StrokeCap.Round)
-                drawLine(Ink, Offset(w * 0.28f, w * 0.53f), Offset(w * 0.56f, w * 0.53f), stroke, StrokeCap.Round)
             }
             TulipKind.LinkLost -> {
                 drawLine(Ink, dot, Offset(dot.x, w * 0.56f), stroke, StrokeCap.Round)

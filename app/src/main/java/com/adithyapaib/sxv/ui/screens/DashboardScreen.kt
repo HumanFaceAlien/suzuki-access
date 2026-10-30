@@ -49,7 +49,9 @@ fun DashboardScreen(
     unit: DistanceUnit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Fuel left and range from the fuel log, odometer and gauge; replaces "bars x 2 L". */
+    fuelEstimate: com.adithyapaib.sxv.garage.FuelEstimate? = null
 ) {
     val clock = rememberNowMs()
     val ageMs = if (lastUpdateMs == 0L) null else (clock - lastUpdateMs).coerceAtLeast(0L)
@@ -78,7 +80,8 @@ fun DashboardScreen(
             speedKmh = telemetry?.speed,
             engineTempC = telemetry?.engineTempC,
             fuelBars = telemetry?.fuelBars ?: 0,
-            fuelLiters = telemetry?.fuelLiters ?: 0.0,
+            fuelLiters = fuelEstimate?.litres ?: telemetry?.fuelLiters ?: 0.0,
+            rangeKm = fuelEstimate?.rangeKm,
             fuelValid = telemetry?.isFuelValid == true,
             unit = unit,
             stale = stale || (!connected && telemetry != null)
@@ -155,7 +158,7 @@ private fun previewRoadbook(): List<RoadbookEntry> {
         RoadbookEntry(5, RoadbookEvent.MOVING, t - 60_000, 396.8, speedKmh = 18),
         RoadbookEntry(4, RoadbookEvent.STOPPED, t - 240_000, 396.8),
         RoadbookEntry(3, RoadbookEvent.WARMED_UP, t - 420_000, 396.1, engineTempC = 80),
-        RoadbookEntry(2, RoadbookEvent.MESSAGE_SENT, t - 600_000, 395.0, message = "HI | HI"),
+        RoadbookEntry(2, RoadbookEvent.CONNECTED, t - 600_000, 395.0),
         RoadbookEntry(1, RoadbookEvent.START, t - 700_000, 395.0, odometerKm = 12334)
     )
 }

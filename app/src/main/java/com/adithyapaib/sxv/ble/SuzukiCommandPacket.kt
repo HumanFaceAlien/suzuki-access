@@ -32,7 +32,7 @@ object SuzukiCommandPacket {
     const val HEADER_BYTE: Byte = 0xA5.toByte()
     const val TERMINATOR_BYTE: Byte = 0x7F.toByte()
 
-    /** Missed-call / notification text. Sibling of [SuzukiDisplaySender]'s '5', one char narrower. */
+    /** Missed-call / notification text. */
     const val COMMAND_NOTIFICATION_TEXT: Byte = '4'.code.toByte()
 
     /** Turn-by-turn navigation (the official app's `a531`). */
