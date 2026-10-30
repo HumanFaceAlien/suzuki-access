@@ -83,10 +83,37 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     private val _lastTelemetryAtMs = MutableStateFlow(0L)
     val lastTelemetryAtMs: StateFlow<Long> = _lastTelemetryAtMs.asStateFlow()
 
+    /** The ride as roadbook rows, newest first; drives the Ride screen's roll. */
+    private val recorder = com.adithyapaib.sxv.ride.RoadbookRecorder()
+    private val _roadbook = MutableStateFlow<List<com.adithyapaib.sxv.ride.RoadbookEntry>>(emptyList())
+    val roadbook: StateFlow<List<com.adithyapaib.sxv.ride.RoadbookEntry>> = _roadbook.asStateFlow()
+
     private var bleManager: BleManager? = null
     private var clusterChannelMap: ClusterChannelMap? = null
 
+    /** Mirrors Google Maps' turn-by-turn notification onto the cluster. */
+    val navigation = com.adithyapaib.sxv.nav.NavigationController(
+        context = application,
+        scope = viewModelScope,
+        isConnected = { _connectionState.value == BleConnectionState.CONNECTED },
+        send = { packet -> bleManager?.sendFrame(packet) == true },
+        trace = ::trace,
+        vtrace = ::vtrace,
+    )
+
     init {
+        navigation.start()
+    }
+
+    init {
+        viewModelScope.launch {
+            connectionState.collect { state -> _roadbook.value = recorder.onConnection(state) }
+        }
+        viewModelScope.launch {
+            sendResults.collect { result ->
+                if (result.success) _roadbook.value = recorder.onMessageSent(result.message)
+            }
+        }
         viewModelScope.launch {
             notifications.collect { bytes ->
                 val parsed = SuzukiPacketParser.parse(bytes)
@@ -96,6 +123,7 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
                 } else {
                     _telemetry.value = parsed
                     _lastTelemetryAtMs.value = System.currentTimeMillis()
+                    _roadbook.value = recorder.onTelemetry(parsed)
                     bleManager?.onTelemetryFrame()
                     val fuelSummary = if (parsed.isFuelValid) {
                         "${parsed.fuelBars}/6 bars ${parsed.fuelLiters}L"

@@ -3,7 +3,6 @@ package com.adithyapaib.sxv
 import com.adithyapaib.sxv.ble.SuzukiChecksum
 import com.adithyapaib.sxv.ble.SuzukiCommandPacket
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -71,92 +70,58 @@ class SuzukiCommandPacketTest {
     }
 
     @Test
-    fun buildsNavigationFrameWithDefaultWidths() {
+    fun buildsNavigationFrameLayout() {
         val packet = SuzukiCommandPacket.buildNavigationPacket(
-            maneuverCode = 0x2E,      // '.'
-            gpsStatus = '1',
-            gpsStatus2 = '0',
+            maneuver = 4,
+            distanceToManeuver = "0450",
+            distanceToManeuverUnit = 'M',
+            eta = "001842",
+            remainingDistance = "05.3",
+            remainingDistanceUnit = 'K',
         )
 
-        checkNotNull(packet) { "default navigation template must assemble to 30 bytes" }
         assertEquals(30, packet.size)
         assertEquals(0xA5.toByte(), packet[0])
         assertEquals('1'.code.toByte(), packet[1])
-        assertEquals(0x2E, packet[2].toInt())
+        assertEquals(4, packet[2].toInt())
         assertEquals(0xFF.toByte(), packet[3])
-        assertEquals(0xFF.toByte(), packet[15])
-        assertEquals(0xFF.toByte(), packet[16])
-        assertEquals(0xFF.toByte(), packet[17])
-        assertEquals(0xFF.toByte(), packet[25])
-        assertEquals(0xFF.toByte(), packet[26])
-        assertEquals(0xFF.toByte(), packet[27])
+        assertEquals("0450M001842", packet.copyOfRange(4, 15).toString(Charsets.US_ASCII))
+        for (index in 15..17) assertEquals(0xFF.toByte(), packet[index])
+        assertEquals("05.3K", packet.copyOfRange(18, 23).toString(Charsets.US_ASCII))
+        assertEquals('1'.code.toByte(), packet[23])
+        assertEquals('1'.code.toByte(), packet[24])
+        for (index in 25..27) assertEquals(0xFF.toByte(), packet[index])
+        assertEquals(SuzukiChecksum.compute(packet), packet[28])
         assertEquals(0x7F.toByte(), packet[29])
+    }
+
+    @Test
+    fun navigationEndFrameStopsNavigation() {
+        val packet = SuzukiCommandPacket.buildNavigationEndPacket()
+
+        assertEquals(SuzukiCommandPacket.NO_MANEUVER, packet[2].toInt())
+        assertEquals('0'.code.toByte(), packet[23])
+        assertEquals('0'.code.toByte(), packet[24])
         assertEquals(SuzukiChecksum.compute(packet), packet[28])
     }
 
     @Test
-    fun gpsStatusLandsAtTheTemplateTail() {
-        val packet = SuzukiCommandPacket.buildNavigationPacket(
-            maneuverCode = 0x30,
-            gpsStatus = '1',
-            gpsStatus2 = '0',
-        )
-
-        checkNotNull(packet)
-        assertEquals('1'.code.toByte(), packet[23])
-        assertEquals('0'.code.toByte(), packet[24])
+    fun formatsDistancesForTheClusterField() {
+        assertEquals("0450" to 'M', SuzukiCommandPacket.formatDistance(450))
+        assertEquals("01.2" to 'K', SuzukiCommandPacket.formatDistance(1_200))
+        assertEquals("12.5" to 'K', SuzukiCommandPacket.formatDistance(12_500))
+        assertEquals("99.9" to 'K', SuzukiCommandPacket.formatDistance(99_949))
+        assertEquals("0150" to 'K', SuzukiCommandPacket.formatDistance(150_000))
+        assertEquals("9999" to 'K', SuzukiCommandPacket.formatDistance(20_000_000))
+        assertEquals("    " to 'M', SuzukiCommandPacket.formatDistance(null))
     }
 
     @Test
-    fun tftEditionSetsByteNineWhenFieldNStartsWithZero() {
-        val tft = SuzukiCommandPacket.buildNavigationPacket(
-            maneuverCode = 0x2E,
-            gpsStatus = '1',
-            gpsStatus2 = '0',
-            fieldN = "010",
-            isTftEdition = true,
-        )
-        checkNotNull(tft)
-        assertEquals(0x20, tft[9].toInt())
-
-        val nonTft = SuzukiCommandPacket.buildNavigationPacket(
-            maneuverCode = 0x2E,
-            gpsStatus = '1',
-            gpsStatus2 = '0',
-            fieldN = "010",
-            isTftEdition = false,
-        )
-        checkNotNull(nonTft)
-        assertEquals('0'.code.toByte(), nonTft[9])
-
-        val wrongStart = SuzukiCommandPacket.buildNavigationPacket(
-            maneuverCode = 0x2E,
-            gpsStatus = '1',
-            gpsStatus2 = '0',
-            fieldN = "510",
-            isTftEdition = true,
-        )
-        checkNotNull(wrongStart)
-        assertEquals('0'.code.toByte(), wrongStart[9])
-    }
-
-    @Test
-    fun returnsNullRatherThanAnUnderOrOverSizedNavigationFrame() {
-        assertNull(
-            SuzukiCommandPacket.buildNavigationPacket(
-                maneuverCode = 0x2E,
-                gpsStatus = '1',
-                gpsStatus2 = '0',
-                fieldN = "01",   // one char short of the template's assumed width
-            )
-        )
-        assertNull(
-            SuzukiCommandPacket.buildNavigationPacket(
-                maneuverCode = 0x2E,
-                gpsStatus = '1',
-                gpsStatus2 = '0',
-                fieldN = "0101",   // one char long
-            )
-        )
+    fun formatsEtaIn24And12HourForms() {
+        val evening = java.time.LocalTime.of(18, 42)
+        assertEquals("001842", SuzukiCommandPacket.formatEta(evening, twelveHour = false))
+        assertEquals("0642PM", SuzukiCommandPacket.formatEta(evening, twelveHour = true))
+        assertEquals("1205AM", SuzukiCommandPacket.formatEta(java.time.LocalTime.of(0, 5), twelveHour = true))
+        assertEquals("      ", SuzukiCommandPacket.formatEta(null, twelveHour = false))
     }
 }

@@ -3,6 +3,7 @@ package com.adithyapaib.sxv.ui.screens
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,36 +11,34 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.adithyapaib.sxv.ble.BleConnectionState
+import com.adithyapaib.sxv.ui.components.HRule
 import com.adithyapaib.sxv.ui.components.Label
+import com.adithyapaib.sxv.ui.components.TextAction
+import com.adithyapaib.sxv.ui.components.inkBox
 import com.adithyapaib.sxv.ui.components.statusStyle
 import com.adithyapaib.sxv.ui.formatAge
 import com.adithyapaib.sxv.ui.rememberNowMs
 import com.adithyapaib.sxv.ui.theme.Dimens
+import com.adithyapaib.sxv.ui.theme.Ink
+import com.adithyapaib.sxv.ui.theme.InkSoft
 import com.adithyapaib.sxv.ui.theme.SXVTheme
 import com.adithyapaib.sxv.ui.theme.Spacing
-import com.adithyapaib.sxv.ui.theme.SurfaceCard
-import com.adithyapaib.sxv.ui.theme.SurfaceInput
-import com.adithyapaib.sxv.ui.theme.TextMuted
-import com.adithyapaib.sxv.ui.theme.TextPrimary
-import com.adithyapaib.sxv.ui.theme.TextSecondary
+import com.adithyapaib.sxv.ui.theme.inkSwitchColors
 
 /** All developer-facing detail lives here: BLE state, GATT characteristics and the raw trace. */
 @Composable
@@ -60,101 +59,72 @@ fun LogsScreen(
     val lastFrame = if (lastUpdateMs == 0L) "None yet" else formatAge((now - lastUpdateMs).coerceAtLeast(0L))
 
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = Spacing.M).padding(top = Spacing.M),
+        modifier.fillMaxSize().padding(horizontal = Spacing.M).padding(top = Spacing.M),
         verticalArrangement = Arrangement.spacedBy(Spacing.M)
     ) {
-        Text("Logs", style = MaterialTheme.typography.headlineSmall)
+        Text("Logs", color = Ink, style = MaterialTheme.typography.headlineSmall)
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = Dimens.CardShape,
-            colors = CardDefaults.cardColors(containerColor = SurfaceCard)
-        ) {
-            Column(Modifier.padding(Spacing.M), verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
-                Label("Connection details")
-                DetailRow("State", connectionState.statusStyle().label)
-                DetailRow("Last frame", lastFrame)
-                DetailRow("Service", "FFF0")
-                DetailRow("Write", "FFF1")
-                DetailRow("Notify", "FFF2")
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Verbose BLE logging", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "GATT table, characteristic reads, RSSI, link parameters and per-byte frame breakdown",
-                            color = TextMuted,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                    Switch(checked = verbose, onCheckedChange = onVerboseChange)
+        Column(Modifier.fillMaxWidth().inkBox()) {
+            DetailRow("State", connectionState.statusStyle().label)
+            HRule()
+            DetailRow("Last frame", lastFrame)
+            HRule()
+            DetailRow("Service · write · notify", "FFF0 · FFF1 · FFF2")
+            HRule()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Dimens.MinTouch)
+                    .toggleable(value = verbose, role = Role.Switch, onValueChange = onVerboseChange)
+                    .padding(horizontal = Spacing.M, vertical = Spacing.S),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Verbose BLE logging", color = Ink, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "GATT table, reads, RSSI, link parameters and a per-byte breakdown of each frame.",
+                        color = InkSoft,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
+                Switch(checked = verbose, onCheckedChange = null, colors = inkSwitchColors())
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Label("Activity")
-            Row {
-                TextButton(
-                    onClick = { clipboard.setText(AnnotatedString(logs.joinToString("\n"))) },
-                    enabled = logs.isNotEmpty(),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text("Copy", style = MaterialTheme.typography.labelMedium) }
-                TextButton(
-                    onClick = {
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "SXV BLE log")
-                            putExtra(Intent.EXTRA_TEXT, logs.joinToString("\n"))
-                        }
-                        context.startActivity(Intent.createChooser(send, "Share BLE log"))
-                    },
-                    enabled = logs.isNotEmpty(),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text("Share", style = MaterialTheme.typography.labelMedium) }
-                TextButton(
-                    onClick = onClearLogs,
-                    enabled = logs.isNotEmpty(),
-                    modifier = Modifier.heightIn(min = 48.dp)
-                ) { Text("Clear", style = MaterialTheme.typography.labelMedium) }
-            }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Label("Activity", Modifier.weight(1f))
+            TextAction("Copy", { clipboard.setText(AnnotatedString(logs.joinToString("\n"))) }, enabled = logs.isNotEmpty())
+            TextAction(
+                "Share",
+                {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "SXV BLE log")
+                        putExtra(Intent.EXTRA_TEXT, logs.joinToString("\n"))
+                    }
+                    context.startActivity(Intent.createChooser(send, "Share BLE log"))
+                },
+                enabled = logs.isNotEmpty()
+            )
+            TextAction("Clear", onClearLogs, enabled = logs.isNotEmpty())
         }
 
-        Card(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            shape = Dimens.CardShape,
-            colors = CardDefaults.cardColors(containerColor = SurfaceInput)
-        ) {
+        Column(Modifier.weight(1f).fillMaxWidth().inkBox()) {
             if (newestFirst.isEmpty()) {
                 Text(
                     "Nothing yet. Bluetooth events will appear here.",
-                    modifier = Modifier.padding(Spacing.M),
-                    color = TextMuted,
-                    style = MaterialTheme.typography.bodyMedium
+                    Modifier.padding(Spacing.M),
+                    color = InkSoft,
+                    style = MaterialTheme.typography.bodySmall
                 )
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(Spacing.M),
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(Spacing.M),
                     verticalArrangement = Arrangement.spacedBy(Spacing.Xs)
                 ) {
                     items(newestFirst) { line ->
-                        Text(
-                            line,
-                            color = TextSecondary,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                lineHeight = 17.sp
-                            )
-                        )
+                        Text(line, color = Ink, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -164,13 +134,16 @@ fun LogsScreen(
 
 @Composable
 private fun DetailRow(name: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(name, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-        Text(value, color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = Spacing.M),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(name.uppercase(), Modifier.weight(1f), color = InkSoft, style = MaterialTheme.typography.labelSmall)
+        Text(value, color = Ink, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 360, heightDp = 800)
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 800)
 @Composable
 private fun LogsPreview() = SXVTheme {
     LogsScreen(

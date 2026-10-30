@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<link href="https://fonts.googleapis.com/css2?family=Hind:wght@500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:390px;height:844px;overflow:hidden;background:#fff;color:#141414;font-family:Hind,sans-serif}
+.status{display:flex;justify-content:space-between;align-items:center;padding:50px 20px 14px;font:700 15px Hind}
+.status span{display:flex;gap:8px;align-items:center}
+.status i{width:22px;height:22px;background:#141414;display:inline-block}
+.hero{background:#ffd000;margin:0 0 10px;padding:16px 20px 10px;display:flex;align-items:flex-end;justify-content:space-between}
+.hero .num{display:flex;gap:4px}
+.flap{background:#141414;color:#ffd000;font:700 150px/1 Hind;width:104px;height:156px;display:flex;align-items:center;justify-content:center;position:relative;padding-top:24px}
+.flap:after{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px solid #ffd000}
+.hero .u{font:700 26px Hind;padding-bottom:6px}
+.band{background:#ffd000;margin:0 0 10px;display:grid;grid-template-columns:64px 1fr auto;align-items:center;height:84px}
+.band .pic{background:#141414;height:84px;display:flex;align-items:center;justify-content:center}
+.band .msg{padding:0 16px;font:700 24px/1.1 Hind}
+.band .msg small{display:block;font:500 14px Hind}
+.band .v{font:700 44px Hind;padding:0 18px;background:#141414;color:#ffd000;height:84px;display:flex;align-items:center}
+.band.quiet{background:#fff;border:2px solid #141414}
+.band.quiet .v{background:#fff;color:#141414;border-left:2px solid #141414}
+nav{position:absolute;bottom:0;left:0;right:0;height:72px;background:#141414;color:#fff;display:flex;justify-content:space-around;align-items:center;font:700 14px Hind}
+nav b{color:#ffd000}
+</style></head><body>
+<div class="status"><span><i></i>Connected</span><span>updated 2 s ago</span></div>
+<div class="hero"><div class="num"><div class="flap">4</div><div class="flap">2</div></div><div class="u">km/h</div></div>
+<div class="band"><div class="pic"><svg width="30" height="40" viewBox="0 0 30 40"><rect x="11" y="2" width="8" height="26" fill="#ffd000"/><circle cx="15" cy="32" r="7" fill="#ffd000"/></svg></div><div class="msg">Engine<small>warm, steady</small></div><div class="v">82°</div></div>
+<div class="band"><div class="pic"><svg width="30" height="40" viewBox="0 0 30 40"><rect x="5" y="6" width="16" height="30" fill="#ffd000"/><path d="M21 12 h5 v18" stroke="#ffd000" stroke-width="3" fill="none"/></svg></div><div class="msg">Fuel<small>≈ 10 L · 5 of 6 bars</small></div><div class="v">5/6</div></div>
+<div class="band quiet"><div class="pic" style="background:#fff;border-right:2px solid #141414"><svg width="30" height="30" viewBox="0 0 30 30"><path d="M4 26 L15 4 L26 26" stroke="#141414" stroke-width="3" fill="none"/></svg></div><div class="msg">Trip A<small>trip B 138.3 km</small></div><div class="v">397.4</div></div>
+<div class="band quiet"><div class="pic" style="background:#fff;border-right:2px solid #141414"><svg width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" stroke="#141414" stroke-width="3" fill="none"/></svg></div><div class="msg">Odometer<small>kilometres</small></div><div class="v" style="font-size:34px">12,336</div></div>
+<nav><b>Ride</b><span>Message</span><span>Logs</span><span>Settings</span></nav>
+</body></html>

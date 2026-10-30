@@ -15,7 +15,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,20 +22,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.adithyapaib.sxv.settings.DistanceUnit
-import com.adithyapaib.sxv.ui.components.ButtonVariant
+import com.adithyapaib.sxv.ui.components.BlockStyle
+import com.adithyapaib.sxv.ui.components.InkSegmented
 import com.adithyapaib.sxv.ui.components.Label
-import com.adithyapaib.sxv.ui.components.PrimaryButton
-import com.adithyapaib.sxv.ui.components.SegmentedToggle
-import com.adithyapaib.sxv.ui.theme.Accent
+import com.adithyapaib.sxv.ui.components.PressBlock
+import com.adithyapaib.sxv.ui.components.inkBox
 import com.adithyapaib.sxv.ui.theme.Dimens
-import com.adithyapaib.sxv.ui.theme.OnAccent
-import com.adithyapaib.sxv.ui.theme.OutlineStrong
+import com.adithyapaib.sxv.ui.theme.Ink
+import com.adithyapaib.sxv.ui.theme.InkSoft
 import com.adithyapaib.sxv.ui.theme.SXVTheme
 import com.adithyapaib.sxv.ui.theme.Spacing
-import com.adithyapaib.sxv.ui.theme.SurfaceRaised
-import com.adithyapaib.sxv.ui.theme.TextPrimary
-import com.adithyapaib.sxv.ui.theme.TextSecondary
+import com.adithyapaib.sxv.ui.theme.inkSwitchColors
 
 @Composable
 fun SettingsScreen(
@@ -44,19 +42,23 @@ fun SettingsScreen(
     keepScreenOn: Boolean,
     onUnitChange: (DistanceUnit) -> Unit,
     onKeepScreenOnChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Google Maps navigation controls (see [NavigationSection]). */
+    navigationSection: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.M),
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Spacing.M),
         verticalArrangement = Arrangement.spacedBy(Spacing.L)
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
+        Text("Settings", color = Ink, style = MaterialTheme.typography.headlineSmall)
+
+        navigationSection()
 
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
             Label("Units")
-            SegmentedToggle(
-                options = listOf("Kilometres", "Miles"),
+            InkSegmented(
+                options = listOf("km · °C", "mi · °F"),
                 selectedIndex = unit.ordinal,
                 onSelect = { onUnitChange(DistanceUnit.entries[it]) }
             )
@@ -65,32 +67,19 @@ fun SettingsScreen(
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
             Label("Display")
             Row(
-                modifier = Modifier
+                Modifier
                     .fillMaxWidth()
+                    .inkBox()
                     .heightIn(min = Dimens.MinTouch)
-                    .toggleable(value = keepScreenOn, role = Role.Switch, onValueChange = onKeepScreenOnChange),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .toggleable(value = keepScreenOn, role = Role.Switch, onValueChange = onKeepScreenOnChange)
+                    .padding(horizontal = Spacing.M, vertical = Spacing.M - 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Keep screen on", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Only while connected to the bike.",
-                        color = TextSecondary,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Text("Keep screen on", color = Ink, style = MaterialTheme.typography.titleMedium)
+                    Text("Only while connected to the bike.", color = InkSoft, style = MaterialTheme.typography.bodySmall)
                 }
-                Switch(
-                    checked = keepScreenOn,
-                    onCheckedChange = null,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = OnAccent,
-                        checkedTrackColor = Accent,
-                        uncheckedThumbColor = TextPrimary,
-                        uncheckedTrackColor = SurfaceRaised,
-                        uncheckedBorderColor = OutlineStrong
-                    )
-                )
+                Switch(checked = keepScreenOn, onCheckedChange = null, colors = inkSwitchColors())
             }
         }
 
@@ -98,12 +87,12 @@ fun SettingsScreen(
             Label("Bluetooth")
             Text(
                 "SXV finds and connects to the cluster on its own. Open system settings to manage the bike's Bluetooth entry.",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium
+                color = InkSoft,
+                style = MaterialTheme.typography.bodySmall
             )
-            PrimaryButton(
-                text = "Open Bluetooth settings",
-                variant = ButtonVariant.Outlined,
+            PressBlock(
+                text = "Bluetooth settings",
+                style = BlockStyle.Paper,
                 onClick = {
                     try {
                         context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -116,7 +105,7 @@ fun SettingsScreen(
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF121212, widthDp = 360, heightDp = 700)
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 700)
 @Composable
 private fun SettingsPreview() = SXVTheme {
     SettingsScreen(DistanceUnit.KILOMETERS, true, {}, {})

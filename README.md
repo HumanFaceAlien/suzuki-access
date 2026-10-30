@@ -11,14 +11,16 @@ Protocol details and reverse-engineering notes are in [FINDINGS.md](FINDINGS.md)
 
 | Tab | What it does |
 |---|---|
-| Dashboard | Connection status, speed (hero), fuel level, engine temperature, odometer, trips A and B. Values dim and show "No update for…" when data goes stale. |
+| Ride | Status line, a ruled header (speed, engine temperature with a sliding needle, six fuel cells) and the roadbook roll: a live "Now" row plus every event of the ride (start, connected, warmed up, stopped, riding again, fuel down, message sent, link lost) at the trip distance it happened. Readings dim when data goes stale. |
 | Message | Two-line message composer with a live counter, quick messages (Fuel stop, Lunch, Follow me), a preview of the cluster line, and recent messages. |
 | Logs | Connection details (state, last frame, FFF0/FFF1/FFF2), the BLE activity trace, a verbose-logging switch, copy and clear. |
 | Settings | Units (km/°C or mi/°F), keep screen on while connected, shortcut to system Bluetooth settings. |
 
-Also: rolling speed counter, haptic feedback on message sent or failed and when the
-connection drops, a landscape layout with a navigation rail for handlebar mounts, and error
-messages shown as snackbars.
+Moving parts, all driven by real telemetry: digits that roll like an odometer, trip
+distance advancing between frames at the reported speed, a distance strip that scrolls one
+tick per 10 m, and a roadbook arrow that flows faster the faster you ride. Also: press-down
+buttons with a key tick, haptics on message sent or failed and when the connection drops, a
+landscape layout with a navigation rail for handlebar mounts, and errors as snackbars.
 
 ## Data from the cluster
 
@@ -68,18 +70,21 @@ app/src/main/java/com/adithyapaib/sxv/
   ble/                     BleManager (scan, GATT, writes), BleViewModel (state),
                            SuzukiPacketParser, SuzukiDisplaySender, SuzukiCommandPacket,
                            SuzukiChecksum, VStromTelemetry
+  ride/Roadbook.kt         turns telemetry and link changes into roadbook events
   settings/AppSettings.kt  units, keep-screen-on, recent messages (SharedPreferences)
   ui/SxvApp.kt             tab shell, haptics, keep-screen-on, snackbars
-  ui/screens/              Dashboard, Message, Logs, Settings
-  ui/components/           StatusChip, PrimaryButton, HeroSpeedCard, MetricCard, FuelCard,
-                           MessageInput, SegmentedToggle, drawn tab icons
+  ui/screens/              Ride (DashboardScreen), Message, Logs, Settings
+  ui/components/           roadbook primitives (ruled boxes, press blocks, rolling digits),
+                           header box and roll, tulip diagrams, drawn tab icons
   ui/theme/                colour, type and spacing tokens
+  res/font/                Saira Condensed (OFL) and Roboto Mono (Apache 2.0)
 app/src/test/              unit tests, including real captured frames
 ```
 
 ## Design
 
-Dark theme (`#121212` background, `#1E1E1E` cards), yellow accent for primary actions only,
-green/amber/red for connection status, an 8-point spacing grid, 16dp card radius, and
-controls at least 56dp tall for use with gloves. Previews for each screen state are in the
-`@Preview` functions under `ui/screens/`.
+"Roadbook": the ride writes itself onto a rally roadbook roll. White paper, ink and one
+rally highlighter orange; heavy ink rules and square corners; Saira Condensed for numerals
+and titles, Roboto Mono for labels and data. The highlighter marks only what is live. See
+DESIGN.md for the full system. Previews for each screen state are in the `@Preview`
+functions under `ui/screens/`.

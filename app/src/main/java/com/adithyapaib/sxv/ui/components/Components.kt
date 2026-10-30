@@ -1,349 +1,291 @@
 package com.adithyapaib.sxv.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import android.provider.Settings
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.adithyapaib.sxv.ble.BleConnectionState
-import com.adithyapaib.sxv.ui.theme.Accent
 import com.adithyapaib.sxv.ui.theme.Dimens
-import com.adithyapaib.sxv.ui.theme.FuelOrange
-import com.adithyapaib.sxv.ui.theme.OnAccent
-import com.adithyapaib.sxv.ui.theme.OutlineStrong
+import com.adithyapaib.sxv.ui.theme.Highlight
+import com.adithyapaib.sxv.ui.theme.Ink
+import com.adithyapaib.sxv.ui.theme.InkFaint
+import com.adithyapaib.sxv.ui.theme.InkSoft
+import com.adithyapaib.sxv.ui.theme.Paper
 import com.adithyapaib.sxv.ui.theme.Spacing
-import com.adithyapaib.sxv.ui.theme.StatusAmber
-import com.adithyapaib.sxv.ui.theme.StatusGreen
-import com.adithyapaib.sxv.ui.theme.StatusRed
-import com.adithyapaib.sxv.ui.theme.SurfaceCard
-import com.adithyapaib.sxv.ui.theme.SurfaceInput
-import com.adithyapaib.sxv.ui.theme.SurfaceRaised
-import com.adithyapaib.sxv.ui.theme.TextMuted
-import com.adithyapaib.sxv.ui.theme.TextPrimary
-import com.adithyapaib.sxv.ui.theme.TextSecondary
 
-/** The one place caps are used: small section labels. */
+// --- Roadbook primitives --------------------------------------------------
+
+/** Small typewritten box label. The only place caps are used. */
 @Composable
-fun Label(text: String, modifier: Modifier = Modifier, color: Color = TextSecondary) {
+fun Label(text: String, modifier: Modifier = Modifier, color: Color = InkSoft) {
     Text(text.uppercase(), modifier, color = color, style = MaterialTheme.typography.labelSmall)
 }
 
-// --- Status ---------------------------------------------------------------
+/** A roadbook box: paper fill inside a heavy ink rule, square corners. */
+fun Modifier.inkBox(fill: Color = Paper, rule: Dp = Dimens.RuleHeavy): Modifier =
+    this.background(fill).border(rule, Ink, RectangleShape)
 
-data class StatusStyle(val label: String, val color: Color, val description: String)
-
-fun BleConnectionState.statusStyle(): StatusStyle = when (this) {
-    BleConnectionState.CONNECTED -> StatusStyle("Connected", StatusGreen, "connected to the bike")
-    BleConnectionState.CONNECTING -> StatusStyle("Connecting", StatusAmber, "connecting to the bike")
-    BleConnectionState.ERROR -> StatusStyle("Connection error", StatusRed, "connection error")
-    BleConnectionState.DISCONNECTED -> StatusStyle("Disconnected", StatusRed, "disconnected from the bike")
+@Composable
+fun HRule(modifier: Modifier = Modifier, thickness: Dp = Dimens.RuleLight, color: Color = Ink) {
+    Box(modifier.fillMaxWidth().height(thickness).background(color))
 }
 
-/** Green connected, amber connecting, red disconnected or error. The label repeats the colour for colour-blind riders. */
 @Composable
-fun StatusChip(state: BleConnectionState, modifier: Modifier = Modifier) {
-    val style = state.statusStyle()
-    val pulse by rememberInfiniteTransition(label = "connecting-pulse").animateFloat(
-        initialValue = 1f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(tween(800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "connecting-pulse-alpha"
-    )
-    val dotAlpha = if (state == BleConnectionState.CONNECTING) pulse else 1f
-    Surface(
-        modifier = modifier.clearAndSetSemantics { contentDescription = "Connection status: ${style.description}" },
-        color = style.color.copy(alpha = 0.16f),
-        shape = CircleShape,
-        border = BorderStroke(1.dp, style.color.copy(alpha = 0.5f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.M - 4.dp, vertical = Spacing.S),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.S)
-        ) {
-            Box(Modifier.size(10.dp).alpha(dotAlpha).clip(CircleShape).background(style.color))
-            Text(style.label, color = style.color, style = MaterialTheme.typography.labelMedium)
+fun VRule(modifier: Modifier = Modifier, thickness: Dp = Dimens.RuleLight, color: Color = Ink) {
+    Box(modifier.fillMaxHeight().width(thickness).background(color))
+}
+
+/**
+ * Digits that roll like a mechanical odometer: each changed digit slides up when the value
+ * grows and down when it falls. Non-digits stay put. Announced as one value.
+ */
+@Composable
+fun RollingText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified
+) {
+    if (!rememberMotionEnabled()) {
+        Text(text, modifier, color = color, style = style)
+        return
+    }
+    val previous = remember { object { var value = text } }
+    val rising = text.numeric() >= previous.value.numeric()
+    previous.value = text
+    Row(modifier.clipToBounds().clearAndSetSemantics { contentDescription = text }) {
+        text.forEachIndexed { index, char ->
+            // Keyed from the right so units stay aligned when the number gains a digit.
+            key(text.length - index) {
+                AnimatedContent(
+                    targetState = char,
+                    transitionSpec = {
+                        val enter = slideInVertically(tween(320, easing = FastOutSlowInEasing)) { if (rising) it else -it } + fadeIn(tween(160))
+                        val exit = slideOutVertically(tween(320, easing = FastOutSlowInEasing)) { if (rising) -it else it } + fadeOut(tween(160))
+                        (enter togetherWith exit).using(SizeTransform(clip = true))
+                    },
+                    label = "roll"
+                ) { shown -> Text(shown.toString(), style = style, color = color) }
+            }
         }
     }
 }
 
-// --- Buttons --------------------------------------------------------------
+private fun String.numeric(): Double = filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: 0.0
 
-enum class ButtonVariant { Filled, Outlined }
+// --- Status ---------------------------------------------------------------
+
+data class StatusStyle(val label: String, val description: String)
+
+fun BleConnectionState.statusStyle(): StatusStyle = when (this) {
+    BleConnectionState.CONNECTED -> StatusStyle("Connected", "connected to the bike")
+    BleConnectionState.CONNECTING -> StatusStyle("Connecting", "connecting to the bike")
+    BleConnectionState.ERROR -> StatusStyle("Connection error", "connection error")
+    BleConnectionState.DISCONNECTED -> StatusStyle("Offline", "not connected to the bike")
+}
 
 /**
- * 56dp-tall full-width button. When disabled it says why, so a muted button never looks broken.
- * Filled uses the yellow accent, which is reserved for the primary action on a screen.
+ * The link's state as a mark, never colour alone: a solid highlighter square when live, the
+ * same square breathing while connecting, an empty ink square offline, a crossed square on error.
  */
 @Composable
-fun PrimaryButton(
+fun StatusMark(state: BleConnectionState, modifier: Modifier = Modifier) {
+    val motion = rememberMotionEnabled()
+    val breathe by rememberInfiniteTransition(label = "connecting").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "connecting-alpha"
+    )
+    val alpha = if (state == BleConnectionState.CONNECTING && motion) breathe else 1f
+    Canvas(modifier.size(14.dp).alpha(alpha)) {
+        val w = size.width
+        val stroke = 2.dp.toPx()
+        when (state) {
+            BleConnectionState.CONNECTED, BleConnectionState.CONNECTING -> {
+                drawRect(Highlight)
+                drawRect(Ink, style = Stroke(stroke))
+            }
+            BleConnectionState.DISCONNECTED -> drawRect(Ink, style = Stroke(stroke))
+            BleConnectionState.ERROR -> {
+                drawRect(Ink)
+                drawLine(Paper, Offset(w * 0.25f, w * 0.25f), Offset(w * 0.75f, w * 0.75f), stroke)
+                drawLine(Paper, Offset(w * 0.75f, w * 0.25f), Offset(w * 0.25f, w * 0.75f), stroke)
+            }
+        }
+    }
+}
+
+// --- Press blocks ---------------------------------------------------------
+
+enum class BlockStyle {
+    /** The one action on a screen: highlighter face on an ink base. */
+    Highlight,
+    /** Everything else that presses: paper face on an ink base. */
+    Paper
+}
+
+/**
+ * A ruled block that presses like a key: on press the face floods with ink and sinks
+ * [Dimens.PressInset] inside its rule, with a key tick under the thumb. No shadow, no base:
+ * depth comes from the ink flood, the roadbook's own mark. Disabled blocks go faint and say
+ * why underneath.
+ */
+@Composable
+fun PressBlock(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    style: BlockStyle = BlockStyle.Highlight,
     enabled: Boolean = true,
-    variant: ButtonVariant = ButtonVariant.Filled,
     disabledReason: String? = null
 ) {
-    val buttonModifier = Modifier.fillMaxWidth().heightIn(min = Dimens.MinTouch)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHapticFeedback.current
+    val down = pressed && enabled
+    val inset by animateDpAsState(
+        targetValue = if (down) Dimens.PressInset else 0.dp,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 1800f),
+        label = "press-inset"
+    )
+    val rest = when {
+        !enabled -> Paper
+        style == BlockStyle.Highlight -> Highlight
+        else -> Paper
+    }
+    val face by animateColorAsState(if (down) Ink else rest, tween(90), label = "press-face")
+    val label by animateColorAsState(
+        when {
+            !enabled -> InkSoft
+            down -> if (style == BlockStyle.Highlight) Highlight else Paper
+            else -> Ink
+        },
+        tween(90),
+        label = "press-label"
+    )
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
-        when (variant) {
-            ButtonVariant.Filled -> Button(
-                onClick = onClick,
-                enabled = enabled,
-                modifier = buttonModifier,
-                shape = Dimens.FieldShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Accent,
-                    contentColor = OnAccent,
-                    disabledContainerColor = SurfaceRaised,
-                    disabledContentColor = TextMuted
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(Dimens.MinTouch)
+                .border(Dimens.RuleHeavy, if (enabled) Ink else InkFaint, RectangleShape)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.VirtualKey)
+                        onClick()
+                    }
                 )
-            ) { Text(text, style = MaterialTheme.typography.labelLarge) }
-
-            ButtonVariant.Outlined -> OutlinedButton(
-                onClick = onClick,
-                enabled = enabled,
-                modifier = buttonModifier,
-                shape = Dimens.FieldShape,
-                border = BorderStroke(1.dp, OutlineStrong),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary, disabledContentColor = TextMuted)
-            ) { Text(text, style = MaterialTheme.typography.labelLarge) }
+                .padding(Dimens.RuleHeavy + inset)
+                .background(face),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text.uppercase(), color = label, style = MaterialTheme.typography.labelLarge)
         }
         if (!enabled && disabledReason != null) {
-            Text(disabledReason, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            Text(disabledReason, color = InkSoft, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
-// --- Cards ----------------------------------------------------------------
-
+/** False when the rider turned "Remove animations" on (animator duration scale 0). */
 @Composable
-private fun cardColors() = CardDefaults.cardColors(containerColor = SurfaceCard)
+fun rememberMotionEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+    }
+}
 
-/** Speed is the hero: 88sp, one line with its unit, and the number rolls instead of jumping. */
+/** A quiet text action at full touch height, for secondary moves like Copy or Disconnect. */
 @Composable
-fun HeroSpeedCard(speed: Int, unit: String, modifier: Modifier = Modifier, dimmed: Boolean = false) {
-    val shown by animateIntAsState(
-        targetValue = speed,
-        animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
-        label = "speed-roll"
-    )
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = "Speed $speed $unit" },
-        shape = Dimens.CardShape,
-        colors = cardColors()
+fun TextAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Box(
+        modifier
+            .heightIn(min = Dimens.MinTouch)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = Spacing.S),
+        contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier.padding(Spacing.L).alpha(if (dimmed) 0.5f else 1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.S)
-        ) {
-            Label("Speed")
-            Row {
-                Text(
-                    shown.toString(),
-                    modifier = Modifier.alignByBaseline(),
-                    style = MaterialTheme.typography.displayLarge,
-                    maxLines = 1
-                )
-                Spacer(Modifier.width(Spacing.S))
-                Text(
-                    unit,
-                    modifier = Modifier.alignByBaseline(),
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        }
-    }
-}
-
-/** Label on top, "value unit" on one line below. */
-@Composable
-fun MetricCard(
-    label: String,
-    value: String,
-    unit: String,
-    modifier: Modifier = Modifier,
-    dimmed: Boolean = false
-) {
-    Card(
-        modifier = modifier.clearAndSetSemantics { contentDescription = "$label $value $unit" },
-        shape = Dimens.CardShape,
-        colors = cardColors()
-    ) {
-        Column(
-            modifier = Modifier.padding(Spacing.M).alpha(if (dimmed) 0.5f else 1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.S)
-        ) {
-            Label(label)
-            Row {
-                Text(
-                    value,
-                    modifier = Modifier.alignByBaseline(),
-                    style = MaterialTheme.typography.headlineMedium,
-                    maxLines = 1
-                )
-                Spacer(Modifier.width(Spacing.Xs))
-                Text(
-                    unit,
-                    modifier = Modifier.alignByBaseline(),
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-
-private enum class FuelLevel(val color: Color, val word: String?) {
-    Normal(Accent, null),
-    Low(FuelOrange, "Low"),
-    Reserve(StatusRed, "Reserve")
-}
-
-private fun fuelLevel(bars: Int) = when {
-    bars <= 1 -> FuelLevel.Reserve
-    bars == 2 -> FuelLevel.Low
-    else -> FuelLevel.Normal
-}
-
-/**
- * Fuel in litres plus a six-segment bar that turns orange when low and red on reserve.
- * Litres are an estimate (2 L per bar, uncalibrated), so the value carries a "≈".
- * Range is deliberately not shown: the cluster sends no consumption data to derive it from.
- */
-@Composable
-fun FuelCard(
-    bars: Int,
-    liters: Double,
-    isValid: Boolean,
-    modifier: Modifier = Modifier,
-    dimmed: Boolean = false
-) {
-    val filled = if (isValid) bars.coerceIn(0, 6) else 0
-    val level = fuelLevel(filled)
-    val litersText = String.format(java.util.Locale.getDefault(), "%.1f", liters)
-    val description = if (isValid) {
-        "Fuel $filled of 6 bars, about $litersText liters${level.word?.let { ", $it" }.orEmpty()}, sensor verified"
-    } else {
-        "Fuel level syncing"
-    }
-    Card(
-        modifier = modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description },
-        shape = Dimens.CardShape,
-        colors = cardColors()
-    ) {
-        Column(
-            modifier = Modifier.padding(Spacing.M).alpha(if (dimmed) 0.5f else 1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.S + 4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Label("Fuel")
-                if (isValid) {
-                    CheckIcon(tint = StatusGreen)
-                } else {
-                    Text("Syncing", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            Row {
-                Text(
-                    if (isValid) "≈ $litersText" else "—",
-                    modifier = Modifier.alignByBaseline(),
-                    style = MaterialTheme.typography.headlineMedium,
-                    maxLines = 1
-                )
-                Spacer(Modifier.width(Spacing.Xs))
-                Text(
-                    "L",
-                    modifier = Modifier.alignByBaseline(),
-                    color = TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.Xs)) {
-                repeat(6) { index ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (index < filled) level.color else SurfaceRaised)
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    if (isValid) "$filled of 6 bars" else "Waiting for the fuel sender",
-                    color = TextMuted,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                level.word?.takeIf { isValid }?.let {
-                    Text(it, color = level.color, style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
+        Text(
+            text.uppercase(),
+            color = if (enabled) Ink else InkSoft,
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 
 // --- Inputs ---------------------------------------------------------------
 
-/** Floating-label field with a quiet sentence-case hint. Caps keyboard stays on: the cluster font is upper-case. */
+/** Square ruled field with a floating label. Caps keyboard stays on: the cluster font is upper-case. */
 @Composable
-fun MessageInput(
+fun InkField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -359,57 +301,49 @@ fun MessageInput(
         label = { Text(label) },
         placeholder = { Text(hint) },
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge,
+        textStyle = MaterialTheme.typography.titleMedium,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = imeAction),
         keyboardActions = KeyboardActions(onDone = { onImeAction() }, onSend = { onImeAction() }),
-        shape = Dimens.FieldShape,
+        shape = RectangleShape,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = SurfaceInput,
-            unfocusedContainerColor = SurfaceInput,
-            focusedTextColor = TextPrimary,
-            unfocusedTextColor = TextPrimary,
-            focusedBorderColor = TextPrimary,
-            unfocusedBorderColor = OutlineStrong,
-            focusedLabelColor = TextPrimary,
-            unfocusedLabelColor = TextSecondary,
-            cursorColor = TextPrimary,
-            focusedPlaceholderColor = TextMuted,
-            unfocusedPlaceholderColor = TextMuted
+            focusedContainerColor = Paper,
+            unfocusedContainerColor = Paper,
+            focusedTextColor = Ink,
+            unfocusedTextColor = Ink,
+            focusedBorderColor = Ink,
+            unfocusedBorderColor = Ink,
+            focusedLabelColor = Ink,
+            unfocusedLabelColor = InkSoft,
+            cursorColor = Highlight,
+            focusedPlaceholderColor = InkSoft,
+            unfocusedPlaceholderColor = InkSoft
         )
     )
 }
 
-/** Two-or-more option switch, 56dp tall. Selected segment uses the accent. */
+/** Ruled segmented choice; the chosen box is inked solid. */
 @Composable
-fun SegmentedToggle(
+fun InkSegmented(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(Dimens.FieldShape)
-            .background(SurfaceRaised)
-            .padding(4.dp)
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+    Row(modifier.fillMaxWidth().inkBox().selectableGroup()) {
         options.forEachIndexed { index, option ->
+            if (index > 0) VRule(Modifier.height(Dimens.MinTouch), thickness = Dimens.RuleHeavy)
             val selected = index == selectedIndex
             Box(
-                modifier = Modifier
+                Modifier
                     .weight(1f)
-                    .heightIn(min = Dimens.MinTouch - 8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) Accent else SurfaceRaised)
+                    .height(Dimens.MinTouch)
+                    .background(if (selected) Ink else Paper)
                     .selectable(selected = selected, role = Role.RadioButton, onClick = { onSelect(index) }),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    option,
-                    color = if (selected) OnAccent else TextPrimary,
+                    option.uppercase(),
+                    color = if (selected) Paper else Ink,
                     style = MaterialTheme.typography.labelLarge
                 )
             }

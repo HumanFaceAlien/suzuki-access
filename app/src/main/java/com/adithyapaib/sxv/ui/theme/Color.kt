@@ -2,28 +2,26 @@ package com.adithyapaib.sxv.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Surfaces
-val Bg = Color(0xFF121212)
-val SurfaceCard = Color(0xFF1E1E1E)
-val SurfaceRaised = Color(0xFF2A2A2A)
-val SurfaceInput = Color(0xFF171717)
+// Roadbook: white roll paper, ink, and one rally highlighter. Nothing else carries colour.
 
-// Accent: primary actions only
-val Accent = Color(0xFFFFD600)
-val OnAccent = Color(0xFF121212)
-val AccentContainer = Color(0xFF4D4100)
+/** The roll. Every screen sits on it. */
+val Paper = Color(0xFFFFFFFF)
 
-// Status
-val StatusGreen = Color(0xFF3DDC84)
-val StatusAmber = Color(0xFFFFB020)
-val StatusRed = Color(0xFFFF6B6B)
-val FuelOrange = Color(0xFFFF8F1F)
+/** Rules, numerals, text, pressed blocks. 18.4:1 on paper. */
+val Ink = Color(0xFF141414)
 
-// Text (all >= 4.5:1 on SurfaceCard)
-val TextPrimary = Color(0xFFF5F5F5)
-val TextSecondary = Color(0xFFB8B8B8)
-val TextMuted = Color(0xFF8E8E8E)
+/** Secondary text, labels, minor distance ticks and scale marks. 7.2:1 on paper. */
+val InkSoft = Color(0xFF575757)
 
-// Dividers vs. input borders (borders need 3:1 against the surface)
-val Outline = Color(0xFF3A3A3A)
-val OutlineStrong = Color(0xFF7A7A7A)
+/** Disabled block outlines only. Never text. */
+val InkFaint = Color(0xFFD6D6D6)
+
+/**
+ * Rally highlighter. Marks what is live right now: the current row, the selected tab, the
+ * temperature needle, the one action. 3.1:1 on paper, so it is used for fills, marks and
+ * display-size numerals only; text sitting on it is [Ink] (5.9:1).
+ */
+val Highlight = Color(0xFFFF5A1F)
+
+/** The current roadbook row's wash. */
+val HighlightWash = Color(0xFFFFF1EA)
