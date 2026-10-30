@@ -37,11 +37,14 @@ data class NavInstruction(
 object GoogleMapsNotificationParser {
 
     private const val UNIT = "(km|m|mi|ft|yd)"
+    /** Same units as [UNIT] but non-capturing — safe to interpolate inside lookaheads
+     *  without shifting the group numbers of the surrounding regex. */
+    private const val UNIT_NC = "(?:km|m|mi|ft|yd)"
     private val leadingDistance = Regex("""^(?:in\s+)?(\d+(?:[.,]\d+)?)\s*$UNIT\b""", RegexOption.IGNORE_CASE)
     private val anyDistance = Regex("""(\d+(?:[.,]\d+)?)\s*$UNIT\b""", RegexOption.IGNORE_CASE)
     /** "18:42", "8:14 am", "18.42"; not a decimal distance such as "1.25 mi". */
     private val clock = Regex(
-        """(?<![\d.,])(\d{1,2})[:.](\d{2})(?!\d)(?!\s*$UNIT\b)(?:\s*([ap])\.?\s*m\b\.?)?""",
+        """(?<![\d.,])(\d{1,2})[:.](\d{2})(?!\d)(?!\s*$UNIT_NC\b)(?:\s*([ap])\.?\s*m\b\.?)?""",
         RegexOption.IGNORE_CASE,
     )
     private val hours = Regex("""(\d+)\s*(?:h|hr|hrs|hour|hours)\b""", RegexOption.IGNORE_CASE)
