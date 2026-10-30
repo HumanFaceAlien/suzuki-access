@@ -49,7 +49,9 @@ fun DashboardScreen(
     unit: DistanceUnit,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Fuel left and range from the fuel log, odometer and gauge; replaces "bars x 2 L". */
+    fuelEstimate: com.adithyapaib.sxv.garage.FuelEstimate? = null
 ) {
     val clock = rememberNowMs()
     val ageMs = if (lastUpdateMs == 0L) null else (clock - lastUpdateMs).coerceAtLeast(0L)
@@ -78,7 +80,8 @@ fun DashboardScreen(
             speedKmh = telemetry?.speed,
             engineTempC = telemetry?.engineTempC,
             fuelBars = telemetry?.fuelBars ?: 0,
-            fuelLiters = telemetry?.fuelLiters ?: 0.0,
+            fuelLiters = fuelEstimate?.litres ?: telemetry?.fuelLiters ?: 0.0,
+            rangeKm = fuelEstimate?.rangeKm,
             fuelValid = telemetry?.isFuelValid == true,
             unit = unit,
             stale = stale || (!connected && telemetry != null)

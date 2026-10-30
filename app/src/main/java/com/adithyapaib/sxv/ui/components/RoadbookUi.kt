@@ -144,8 +144,11 @@ fun HeaderBox(
     fuelValid: Boolean,
     unit: DistanceUnit,
     stale: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Estimated km to empty, from the fuel estimator; null until economy is measured. */
+    rangeKm: Int? = null
 ) {
+    val rangeShown = rangeKm?.let { "≈ ${formatOdometer(it, unit)} ${unit.distance}" }
     val speedShown = speedKmh?.let { speedIn(unit, it).toString() } ?: "—"
     val tempShown = engineTempC?.let { unit.temperatureFromCelsius(it).toString() } ?: "—"
     val bars = if (fuelValid) fuelBars.coerceIn(0, 6) else 0
@@ -162,6 +165,7 @@ fun HeaderBox(
         append("Speed $speedShown ${unit.speed}. ")
         append("Engine $tempShown ${unit.temperature}. ")
         append(if (fuelValid) "Fuel $bars of 6 bars, about $litersText litres${level?.let { ", $it" }.orEmpty()}." else "Fuel syncing.")
+        rangeShown?.let { append(" Range $it.") }
     }
     // The speed numeral is already huge; cap it against the system font scale so three
     // digits always fit their box instead of being clipped.
@@ -196,7 +200,7 @@ fun HeaderBox(
             }
             HRule()
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Label("Fuel")
+                Label(if (rangeShown != null && fuelValid) "Fuel · $rangeShown" else "Fuel")
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (fuelValid) "$bars/6" else "—", color = reading, style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.width(Spacing.S))

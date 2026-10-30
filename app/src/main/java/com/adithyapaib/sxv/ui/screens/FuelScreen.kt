@@ -33,7 +33,16 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.adithyapaib.sxv.garage.FillUpPrompt
+import com.adithyapaib.sxv.garage.FuelEstimate
+import com.adithyapaib.sxv.ui.components.FuelLeftCard
+import com.adithyapaib.sxv.ui.components.fuelHistoryPoints
 import com.adithyapaib.sxv.garage.FuelMath
 import com.adithyapaib.sxv.garage.FuelRecord
 import com.adithyapaib.sxv.settings.DistanceUnit
@@ -76,8 +85,14 @@ fun FuelScreen(
     onAdd: (litres: Double, cost: Double, odometerKm: Int, fullTank: Boolean) -> Unit,
     onDelete: (Long) -> Unit,
     onDismissPrompt: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    estimate: FuelEstimate? = null,
+    tankSetting: Double? = null,
+    onTankChange: (Double) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    // Low-fuel alerts need the notification permission; ask the first time a fill-up is logged.
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val now = remember(records) { System.currentTimeMillis() }
     val summary = remember(records) { FuelMath.summary(records, now) }
     val segments = remember(records) { FuelMath.segments(records).sortedBy { it.endAtMs } }
@@ -119,11 +134,31 @@ fun FuelScreen(
                 onSave = { l, c, o, f ->
                     onAdd(l, c, o, f)
                     formOpen = false
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+                    if (records.isEmpty() && !granted) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                 },
                 onCancel = { formOpen = false }
             )
         } else {
             PressBlock("Log fill-up", { formOpen = true })
+        }
+
+        FuelLeftCard(estimate, unit, tankSetting, onTankChange)
+
+        val history = estimate?.history.orEmpty()
+        if (history.size >= 2) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.S)) {
+                Label("Fuel left since full tank · L")
+                Column(Modifier.fillMaxWidth().inkBox().padding(Spacing.M - 4.dp)) {
+                    val points = fuelHistoryPoints(history)
+                    RoadLineChart(
+                        points,
+                        axisFormat = { String.format(Locale.getDefault(), "%.0f", it) },
+                        description = "Estimated fuel left since the last full tank, ${points.size} points, now ${points.last().readout}."
+                    )
+                }
+            }
         }
 
         // Summary: four readings in one ruled box.

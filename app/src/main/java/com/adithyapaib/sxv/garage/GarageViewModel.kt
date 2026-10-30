@@ -45,20 +45,79 @@ class GarageViewModel(application: Application) : AndroidViewModel(application) 
     private val _fillUpPrompt = MutableStateFlow<FillUpPrompt?>(null)
     val fillUpPrompt: StateFlow<FillUpPrompt?> = _fillUpPrompt.asStateFlow()
 
-    private var lastFuelBars: Int? = null
+    /** The gauge as last seen live; null while the bike has not reported a valid reading. */
+    private val liveBars = MutableStateFlow<Int?>(null)
+
+    /** Fuel left and range, re-estimated whenever the odometer, gauge or log changes. */
+    val estimate: StateFlow<FuelEstimate?> = combine(data, liveBars) { d, bars -> estimateFor(d, bars) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, estimateFor(data.value, null))
+
+    /** The rider's tank size, or null while the default is in use. */
+    val tankLitres: StateFlow<Double?> = data
+        .map { it.tankLitres }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, data.value.tankLitres)
+
+    private fun estimateFor(d: GarageData, bars: Int?) =
+        FuelEstimator.estimate(d.fuel, d.barDrops, d.lastOdometerKm, bars, d.tankLitres)
+
+    // Gauge tracking. Fuel sloshes, so a step only counts once it holds for STEADY_FRAMES.
+    private var steadyBars: Int? = null
+    private var pendingBars: Int? = null
+    private var pendingFrames = 0
 
     fun onTelemetry(t: VStromTelemetry) {
-        if (t.isFuelValid) {
-            val previous = lastFuelBars
-            if (previous != null && t.fuelBars - previous >= 2) {
-                _fillUpPrompt.value = FillUpPrompt(t.odometer, t.fuelBars, System.currentTimeMillis())
-            }
-            lastFuelBars = t.fuelBars
-        }
         if (t.odometer > 0 && t.odometer != data.value.lastOdometerKm) {
             update { it.copy(lastOdometerKm = t.odometer) }
             notifyNewlyDue()
         }
+        if (t.isFuelValid) {
+            liveBars.value = t.fuelBars
+            trackGauge(t.fuelBars, t.odometer)
+            notifyLowRange()
+        }
+    }
+
+    private fun trackGauge(bars: Int, odometerKm: Int) {
+        val steady = steadyBars
+        if (steady == null) {
+            steadyBars = bars
+            return
+        }
+        if (bars == steady) {
+            pendingBars = null
+            pendingFrames = 0
+            return
+        }
+        if (bars == pendingBars) pendingFrames++ else {
+            pendingBars = bars
+            pendingFrames = 1
+        }
+        if (pendingFrames < STEADY_FRAMES) return
+        when {
+            bars < steady -> update {
+                it.copy(barDrops = (it.barDrops + BarDrop(odometerKm, bars, System.currentTimeMillis())).takeLast(MAX_DROPS))
+            }
+            bars - steady >= 2 -> _fillUpPrompt.value = FillUpPrompt(odometerKm, bars, System.currentTimeMillis())
+            // A single-bar rise without a fill is the float settling; just follow it.
+        }
+        steadyBars = bars
+        pendingBars = null
+        pendingFrames = 0
+    }
+
+    fun setTankLitres(litres: Double) = update { it.copy(tankLitres = litres) }
+
+    /** One low-range alert per tank, keyed by the last full fill, once range is known. */
+    private fun notifyLowRange() {
+        // Computed here rather than read from [estimate], which updates a beat later.
+        val e = estimateFor(data.value, liveBars.value) ?: return
+        val range = e.rangeKm ?: return
+        if (range > LOW_RANGE_KM) return
+        val tank = FuelMath.sorted(data.value.fuel).lastOrNull { it.fullTank }?.id ?: 0L
+        val key = "fuel:$tank"
+        if (key in data.value.notified) return
+        notifier.notifyLowRange(range, e.litres)
+        update { it.copy(notified = it.notified + key) }
     }
 
     fun addFuel(litres: Double, cost: Double, odometerKm: Int, fullTank: Boolean) {
@@ -133,6 +192,13 @@ class GarageViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun key(status: MaintenanceStatus) =
         "${status.item.id}:${status.item.lastDoneKm}:${status.item.lastDoneAtMs}:${status.state}"
+
+    private companion object {
+        /** 3 frames = 15 s of the same new reading. */
+        const val STEADY_FRAMES = 3
+        const val MAX_DROPS = 300
+        const val LOW_RANGE_KM = 40
+    }
 
     private fun update(change: (GarageData) -> GarageData) {
         val next = change(data.value)

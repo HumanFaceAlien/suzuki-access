@@ -82,6 +82,8 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageV
     val serviceStatuses by garage.service.collectAsStateWithLifecycle()
     val lastOdometerKm by garage.odometerKm.collectAsStateWithLifecycle()
     val fillUpPrompt by garage.fillUpPrompt.collectAsStateWithLifecycle()
+    val fuelEstimate by garage.estimate.collectAsStateWithLifecycle()
+    val tankLitres by garage.tankLitres.collectAsStateWithLifecycle()
     val serviceDue = serviceStatuses.count { it.state == DueState.Due || it.state == DueState.Soon }
 
     // The garage counts down from the bike's own odometer and watches the fuel bars for fill-ups.
@@ -206,7 +208,8 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageV
                         roadbook = roadbook,
                         unit = unit,
                         onConnect = viewModel::connect,
-                        onDisconnect = viewModel::disconnect
+                        onDisconnect = viewModel::disconnect,
+                        fuelEstimate = fuelEstimate
                     )
                     AppTab.Fuel -> FuelScreen(
                         records = fuelRecords,
@@ -215,7 +218,10 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageV
                         prompt = fillUpPrompt,
                         onAdd = garage::addFuel,
                         onDelete = garage::deleteFuel,
-                        onDismissPrompt = garage::dismissFillUp
+                        onDismissPrompt = garage::dismissFillUp,
+                        estimate = fuelEstimate,
+                        tankSetting = tankLitres,
+                        onTankChange = garage::setTankLitres
                     )
                     AppTab.Service -> ServiceScreen(
                         statuses = serviceStatuses,

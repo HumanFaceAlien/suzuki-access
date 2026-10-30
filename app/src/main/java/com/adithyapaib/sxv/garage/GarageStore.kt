@@ -12,7 +12,11 @@ data class GarageData(
     val lastOdometerKm: Int? = null,
     /** Reminders already notified, keyed by item, cycle and state, so each fires once. */
     val notified: Set<String> = emptySet(),
-    val nextId: Long = 1
+    val nextId: Long = 1,
+    /** Each time the fuel gauge stepped down, for learning what each bar means. */
+    val barDrops: List<BarDrop> = emptyList(),
+    /** The rider's tank size; null means [FuelEstimator.DEFAULT_TANK_LITRES]. */
+    val tankLitres: Double? = null
 )
 
 class GarageStore(dir: File) {
@@ -37,6 +41,12 @@ class GarageStore(dir: File) {
         put("nextId", data.nextId)
         data.lastOdometerKm?.let { put("lastOdometerKm", it) }
         put("notified", JSONArray(data.notified.toList()))
+        data.tankLitres?.let { put("tankLitres", it) }
+        put("barDrops", JSONArray().apply {
+            data.barDrops.forEach { d ->
+                put(JSONObject().apply { put("odometerKm", d.odometerKm); put("toBars", d.toBars); put("atMs", d.atMs) })
+            }
+        })
         put("fuel", JSONArray().apply {
             data.fuel.forEach { r ->
                 put(JSONObject().apply {
@@ -62,7 +72,13 @@ class GarageStore(dir: File) {
         val fuel = json.optJSONArray("fuel") ?: JSONArray()
         val items = json.optJSONArray("items") ?: JSONArray()
         val notified = json.optJSONArray("notified") ?: JSONArray()
+        val drops = json.optJSONArray("barDrops") ?: JSONArray()
         return GarageData(
+            barDrops = (0 until drops.length()).map { index ->
+                val o = drops.getJSONObject(index)
+                BarDrop(o.getInt("odometerKm"), o.getInt("toBars"), o.getLong("atMs"))
+            },
+            tankLitres = if (json.has("tankLitres")) json.getDouble("tankLitres") else null,
             fuel = (0 until fuel.length()).map { index ->
                 val o = fuel.getJSONObject(index)
                 FuelRecord(
