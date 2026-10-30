@@ -96,6 +96,7 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
                 } else {
                     _telemetry.value = parsed
                     _lastTelemetryAtMs.value = System.currentTimeMillis()
+                    bleManager?.onTelemetryFrame()
                     val fuelSummary = if (parsed.isFuelValid) {
                         "${parsed.fuelBars}/6 bars ${parsed.fuelLiters}L"
                     } else {

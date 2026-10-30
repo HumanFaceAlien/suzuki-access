@@ -156,9 +156,17 @@ Device Information contents on this bike:
 | Regulatory list    | `FE-00-"experimental"`                                     |
 
 **Connection behaviour (corrects the earlier assumption):**
-- nRF Connect wrote nothing to FFF1 and the bike still streamed `'7'` frames, so no
-  identity/handshake write is needed on this bike. (The other write-up reported the
-  opposite for the Gixxer.)
+- ~~nRF Connect wrote nothing to FFF1 and the bike still streamed `'7'` frames, so no
+  identity/handshake write is needed on this bike.~~ **Revised 2026-10-30:** SXV's own
+  logs show a silent session (CCCD confirmed, zero frames for 68 s, then status 8) and
+  the rider reports data appears only after opening the official app. Android shares one
+  LE link per device between apps, so frames reach every subscribed app once the
+  official app has sent its identity frame (`'6'`). The streaming nRF sessions all began
+  with an `ACL_CONNECTED` broadcast before nRF connected, i.e. another app already held
+  the link. SXV now sends `'6'` itself after the CCCD write (unconfirmed on the bike).
+- A second Suzuki cluster nearby, `SAS02xxxxxx` @ `XX:XX:XX:XX:XX:XX` (Access-family
+  name, Telit Terminal I/O service `FEFB`, no FFF0), matched SXV's name filter and was
+  connected to repeatedly. SXV now prefers the known bike and skips non-FFF0 devices.
 - Connections that streamed had the bike negotiate parameters (7.5 ms → 48.75 ms
   interval, MTU 65) within about a second of connecting. Connections that never
   negotiated stayed silent and ended in GATT error 8 (supervision timeout) after

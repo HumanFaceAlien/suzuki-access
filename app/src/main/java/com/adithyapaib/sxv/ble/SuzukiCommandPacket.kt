@@ -43,6 +43,15 @@ object SuzukiCommandPacket {
     const val COMMAND_NAVIGATION: Byte = '1'.code.toByte()
 
     /**
+     * Rider identity. The official app writes this right after enabling FFF2
+     * notifications; the cluster does not stream telemetry until it arrives.
+     */
+    const val COMMAND_IDENTITY: Byte = '6'.code.toByte()
+
+    /** Display-name width for [buildIdentityPacket]. */
+    const val MAX_IDENTITY_NAME_LENGTH = 20
+
+    /**
      * Visible text width for [buildNotificationTextPacket].
      *
      * The APK pads its text field to **23** chars at bytes[2..24], then overwrites
@@ -82,6 +91,40 @@ object SuzukiCommandPacket {
         sanitized.toByteArray(Charsets.US_ASCII).copyInto(packet, destinationOffset = 4)
         packet[24] = 'N'.code.toByte()
         for (index in 25..27) packet[index] = 0xFF.toByte()
+        packet[CHECKSUM_INDEX] = SuzukiChecksum.compute(packet, mode)
+        packet[TERMINATOR_INDEX] = TERMINATOR_BYTE
+        return packet
+    }
+
+    /**
+     * Identity frame (the official app's `a536`), the handshake that starts the
+     * telemetry stream.
+     *
+     * ```
+     * [1]      '6'
+     * [2..21]  rider name, [MAX_IDENTITY_NAME_LENGTH] ASCII chars, NUL padded
+     * [22..26] 0xFF
+     * [27]     'F' first connection to this cluster, 'R' reconnect
+     * ```
+     *
+     * Layout from github.com/mrwick1/suzuki-connect-re `tools/protocol.py`
+     * (Gixxer SF 150, replay-tested there); not yet confirmed on the V-STROM SX.
+     */
+    fun buildIdentityPacket(
+        name: String,
+        reconnect: Boolean = true,
+        mode: SuzukiChecksum.Mode = SuzukiChecksum.Mode.PLAIN_SUM,
+    ): ByteArray {
+        val sanitized = name.sanitizeVisible()
+            .take(MAX_IDENTITY_NAME_LENGTH)
+            .padTo(MAX_IDENTITY_NAME_LENGTH)
+
+        val packet = ByteArray(PACKET_SIZE)
+        packet[HEADER_INDEX] = HEADER_BYTE
+        packet[COMMAND_INDEX] = COMMAND_IDENTITY
+        sanitized.toByteArray(Charsets.US_ASCII).copyInto(packet, destinationOffset = 2)
+        for (index in 22..26) packet[index] = 0xFF.toByte()
+        packet[27] = (if (reconnect) 'R' else 'F').code.toByte()
         packet[CHECKSUM_INDEX] = SuzukiChecksum.compute(packet, mode)
         packet[TERMINATOR_INDEX] = TERMINATOR_BYTE
         return packet

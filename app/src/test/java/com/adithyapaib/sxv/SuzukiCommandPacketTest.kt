@@ -48,6 +48,29 @@ class SuzukiCommandPacketTest {
     }
 
     @Test
+    fun buildsIdentityFrameShape() {
+        val packet = SuzukiCommandPacket.buildIdentityPacket("SXV")
+
+        assertEquals(30, packet.size)
+        assertEquals(0xA5.toByte(), packet[0])
+        assertEquals('6'.code.toByte(), packet[1])
+        assertEquals("SXV", packet.copyOfRange(2, 5).toString(Charsets.US_ASCII))
+        for (index in 5..21) assertEquals(0.toByte(), packet[index])
+        for (index in 22..26) assertEquals(0xFF.toByte(), packet[index])
+        assertEquals('R'.code.toByte(), packet[27])
+        assertEquals(SuzukiChecksum.compute(packet), packet[28])
+        assertEquals(0x7F.toByte(), packet[29])
+    }
+
+    @Test
+    fun identityFlagAndNameTruncation() {
+        val packet = SuzukiCommandPacket.buildIdentityPacket("A".repeat(30), reconnect = false)
+
+        assertEquals("A".repeat(20), packet.copyOfRange(2, 22).toString(Charsets.US_ASCII))
+        assertEquals('F'.code.toByte(), packet[27])
+    }
+
+    @Test
     fun buildsNavigationFrameWithDefaultWidths() {
         val packet = SuzukiCommandPacket.buildNavigationPacket(
             maneuverCode = 0x2E,      // '.'

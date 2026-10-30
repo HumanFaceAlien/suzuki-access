@@ -30,6 +30,14 @@ import java.util.UUID
  *     4th GATT service's 2nd characteristic (MyBleService.a()), which is
  *     what activates the cluster's notification stream.
  *  5. Enable FFF2 notifications.
+ *  6. Write the identity frame ('6') to FFF1. Without it the cluster accepts
+ *     the subscription but sends nothing, and drops the link after about a
+ *     minute; this is what the official app does when it connects. Resent up
+ *     to [MAX_IDENTITY_ATTEMPTS] times if no telemetry follows.
+ *
+ * Other Suzuki clusters nearby (e.g. an Access scooter, `SAS…`) also match the
+ * name pattern, so the known bike is preferred and any device without FFF0 is
+ * skipped for the rest of the session.
  */
 class BleManager(
     context: Context,
@@ -48,6 +56,21 @@ class BleManager(
     private var mtuCallbackReceived = false
     private var writeInFlightSince = 0L
     private var notificationsConfirmed = false
+    private var telemetrySeen = false
+    private var identityAttempts = 0
+    private var identityWritePending = false
+    private val rejectedAddresses = mutableSetOf<String>()
+    private var scanCandidate: BluetoothDevice? = null
+    private val identityWatchdog = Runnable {
+        val active = gatt ?: return@Runnable
+        if (telemetrySeen) return@Runnable
+        if (identityAttempts < MAX_IDENTITY_ATTEMPTS) {
+            viewModel.trace("No telemetry ${IDENTITY_TIMEOUT_MS / 1000}s after identity; resending")
+            sendIdentity(active)
+        } else {
+            viewModel.trace("No telemetry after $identityAttempts identity writes")
+        }
+    }
     private val verboseReadQueue = ArrayDeque<BluetoothGattCharacteristic>()
     private var verboseReadInFlight: BluetoothGattCharacteristic? = null
     private val verboseReadTimeout = Runnable {
@@ -150,6 +173,31 @@ class BleManager(
         return if (printable && value.isNotEmpty()) "$hex \"${String(value, Charsets.US_ASCII)}\"" else hex
     }
 
+    /** Called by the ViewModel for every valid telemetry frame. */
+    fun onTelemetryFrame() {
+        if (!telemetrySeen) viewModel.trace("Telemetry stream started")
+        telemetrySeen = true
+        retryAttempt = 0
+        handler.removeCallbacks(identityWatchdog)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun sendIdentity(gatt: BluetoothGatt) {
+        val channelMap = viewModel.currentClusterChannelMap() ?: return
+        identityAttempts++
+        val packet = SuzukiCommandPacket.buildIdentityPacket(IDENTITY_NAME)
+        viewModel.trace("TX identity (attempt $identityAttempts/$MAX_IDENTITY_ATTEMPTS): ${SuzukiDisplaySender.toHex(packet)}")
+        identityWritePending = SuzukiDisplaySender.sendPacket(gatt, channelMap.writeCharacteristic, packet)
+        if (identityWritePending) {
+            writeInFlightSince = SystemClock.elapsedRealtime()
+        } else {
+            viewModel.trace("Identity write was not started")
+            if (identityAttempts == 1) startVerboseDiagnostics(gatt)
+        }
+        handler.removeCallbacks(identityWatchdog)
+        handler.postDelayed(identityWatchdog, IDENTITY_TIMEOUT_MS)
+    }
+
     @SuppressLint("MissingPermission")
     fun connect() {
         val bluetoothAdapter = adapter
@@ -176,7 +224,8 @@ class BleManager(
             return
         }
         scanning = true
-        viewModel.trace("Scanning for cluster (name contains SA/SB/SC, 12 chars)...")
+        scanCandidate = null
+        viewModel.trace("Scanning for $TARGET_DEVICE_NAME (other SA/SB/SC 12-char names as fallback)...")
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
@@ -195,9 +244,16 @@ class BleManager(
         }
         handler.postDelayed({
             if (scanning) {
-                viewModel.trace("Scan timed out; falling back to direct connect by MAC")
                 stopScan()
-                connectDirect()
+                val candidate = scanCandidate
+                scanCandidate = null
+                if (candidate != null) {
+                    viewModel.trace("Scan timed out without $TARGET_DEVICE_NAME; trying ${candidate.address}")
+                    connectToDevice(candidate)
+                } else {
+                    viewModel.trace("Scan timed out; falling back to direct connect by MAC")
+                    connectDirect()
+                }
             }
         }, SCAN_TIMEOUT_MS)
     }
@@ -247,11 +303,19 @@ class BleManager(
             if (!scanning) return
             val device = result.device
             val name = result.scanRecord?.deviceName ?: device.name ?: ""
-            if (name.length == 12 && (name.contains("SA") || name.contains("SB") || name.contains("SC"))) {
+            val isTarget = device.address.equals(TARGET_DEVICE_ADDRESS, ignoreCase = true) ||
+                name == TARGET_DEVICE_NAME
+            val looksLikeCluster = name.length == 12 &&
+                (name.contains("SA") || name.contains("SB") || name.contains("SC"))
+            if (isTarget) {
                 viewModel.trace("Found cluster: $name @ ${device.address}")
                 stopScan()
                 handler.removeCallbacksAndMessages(null)
                 connectToDevice(device)
+            } else if (looksLikeCluster && device.address !in rejectedAddresses && scanCandidate == null) {
+                // Keep scanning for the known bike; only fall back to this one on timeout.
+                viewModel.trace("Seen other cluster-like device $name @ ${device.address}; still looking for $TARGET_DEVICE_NAME")
+                scanCandidate = device
             }
         }
 
@@ -324,7 +388,11 @@ class BleManager(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             viewModel.trace("Connection state status=$status state=$newState")
             if (newState == BluetoothGatt.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
-                retryAttempt = 0
+                // retryAttempt is reset by the first telemetry frame, not here: a link
+                // that connects but never streams must still count toward MAX_RETRIES.
+                telemetrySeen = false
+                identityAttempts = 0
+                identityWritePending = false
                 handler.removeCallbacksAndMessages(null)
                 viewModel.onConnected()
                 servicesDiscoveryStarted = false
@@ -347,6 +415,8 @@ class BleManager(
                 verboseReadInFlight = null
                 handler.removeCallbacks(rssiPoll)
                 handler.removeCallbacks(verboseReadTimeout)
+                handler.removeCallbacks(identityWatchdog)
+                identityWritePending = false
                 viewModel.vtrace(
                     "Disconnect status=$status (8=supervision timeout, 19=peer terminated, 22=local terminated, 133=generic error)"
                 )
@@ -390,6 +460,8 @@ class BleManager(
 
             val channelMap = viewModel.resolveClusterChannelMap(gatt)
             if (channelMap == null) {
+                rejectedAddresses += gatt.device.address
+                viewModel.trace("Skipping ${gatt.device.address} for this session: no FFF0 service, not the bike")
                 failConnection("Required FFF0/FFF1/FFF2 BLE UUIDs were not found")
                 return
             }
@@ -454,7 +526,14 @@ class BleManager(
             status: Int
         ) {
             writeInFlightSince = 0L
-            viewModel.trace("Cluster write completed status=$status")
+            if (identityWritePending) {
+                identityWritePending = false
+                viewModel.trace("Identity write completed status=$status")
+                // The sweep's reads would collide with the identity write, so it starts after.
+                if (identityAttempts == 1) startVerboseDiagnostics(gatt)
+            } else {
+                viewModel.trace("Cluster write completed status=$status")
+            }
         }
 
         override fun onDescriptorWrite(
@@ -466,7 +545,7 @@ class BleManager(
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     viewModel.trace("CCCD write confirmed; notifications enabled")
                     notificationsConfirmed = true
-                    startVerboseDiagnostics(gatt)
+                    sendIdentity(gatt)
                 } else {
                     failConnection("CCCD write failed: $status")
                 }
@@ -520,6 +599,11 @@ class BleManager(
 
     private companion object {
         const val TARGET_DEVICE_ADDRESS = "XX:XX:XX:XX:XX:XX"
+        const val TARGET_DEVICE_NAME = "SBM01xxxxxx"
+        /** Rider name sent in the identity frame; the cluster may show it as a greeting. */
+        const val IDENTITY_NAME = "SXV"
+        const val MAX_IDENTITY_ATTEMPTS = 3
+        const val IDENTITY_TIMEOUT_MS = 8_000L
         const val MAX_RETRIES = 3
         const val RETRY_DELAY_MS = 1_500L
         const val SCAN_TIMEOUT_MS = 6_000L
