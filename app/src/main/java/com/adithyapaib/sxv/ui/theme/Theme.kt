@@ -5,26 +5,26 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Gold,
-    onPrimary = Charcoal,
-    primaryContainer = GoldDark,
-    onPrimaryContainer = Gold,
-    secondary = Gold,
-    onSecondary = Charcoal,
-    error = Danger,
-    background = Charcoal,
+    primary = Accent,
+    onPrimary = OnAccent,
+    primaryContainer = AccentContainer,
+    onPrimaryContainer = Accent,
+    secondary = Accent,
+    onSecondary = OnAccent,
+    error = StatusRed,
+    background = Bg,
     onBackground = TextPrimary,
-    surface = Surface,
+    surface = SurfaceCard,
     onSurface = TextPrimary,
     surfaceVariant = SurfaceRaised,
     onSurfaceVariant = TextSecondary,
-    outline = Outline
+    surfaceContainer = SurfaceCard,
+    outline = OutlineStrong,
+    outlineVariant = Outline
 )
 
 @Composable
-fun SXVTheme(
-    content: @Composable () -> Unit
-) {
+fun SXVTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkColorScheme,
         typography = Typography,

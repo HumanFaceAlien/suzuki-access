@@ -21,15 +21,16 @@ package com.adithyapaib.sxv.ble
  * [17..22]   trip B, 6 digits (tenths)
  * [23]       gear position — always 'N' in every capture so far
  * [24]       fuel bars, ASCII '1'..'6'
- * [25..27]   cumulative fuel-consumption accumulator (see note below)
+ * [25]       engine temperature, raw °C (likely oil/engine; see [VStromTelemetry.engineTempC])
+ * [26..27]   0xFF 0xFF in every capture: padding
  * [28]       checksum, see [SuzukiChecksum]
  * [29]       0x7F
  * ```
  *
- * Bytes [25..27] are read but discarded by the APK's dashboard parser
- * (`C.java:831-832`); `NavigationActivity:203-219` decodes them as a 24-bit
- * fixed-point value into a field that is never read. They are covered by the
- * checksum but not surfaced here.
+ * Byte [25] was previously thought to be the high byte of a fuel-consumption accumulator
+ * (`NavigationActivity:203-219`, never read by the APK). The five captured rides show it
+ * tracking engine temperature instead: 27 cold, 67 at the start of a ride, a 90 peak, a drop
+ * during a break, and 46 on a restart after 1h40.
  *
  * The APK rejects a frame unless the header, command, terminator **and**
  * checksum all match; this parser mirrors that gate so a corrupted frame
@@ -47,6 +48,10 @@ object SuzukiPacketParser {
     const val HEADER_BYTE: Byte = 0xA5.toByte()
     const val COMMAND_BYTE: Byte = '7'.code.toByte()
     const val TERMINATOR_BYTE: Byte = 0x7F.toByte()
+
+    /** Raw engine temperature in °C (one unsigned byte, not ASCII). */
+    private const val TEMPERATURE_INDEX = 25
+    private val PLAUSIBLE_TEMP_C = 0..150
 
     /** Bytes[1..24] as ASCII. Index `i` here is absolute byte `i + 1`. */
     private const val ASCII_START = 1
@@ -102,6 +107,7 @@ object SuzukiPacketParser {
                 } else {
                     0
                 },
+                engineTempC = (bytes[TEMPERATURE_INDEX].toInt() and 0xFF).takeIf { it in PLAUSIBLE_TEMP_C },
             )
         } catch (_: RuntimeException) {
             null

@@ -33,6 +33,8 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
         val WRITE_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")
         val NOTIFICATION_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb")
         const val TARGET_DEVICE_ADDRESS = "XX:XX:XX:XX:XX:XX"
+        const val LOG_LIMIT = 200
+        const val VERBOSE_LOG_LIMIT = 5_000
     }
 
     data class ClusterChannelMap(
@@ -55,6 +57,13 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
+    /** When on, the link logs the GATT table, every read, RSSI, link parameters and a per-field breakdown of each frame. */
+    private val _verbose = MutableStateFlow(false)
+    val verbose: StateFlow<Boolean> = _verbose.asStateFlow()
+
+    private var lastFrame: ByteArray? = null
+    private var lastFrameAtMs = 0L
+
     private val _displayInput = MutableStateFlow("")
     val displayInput: StateFlow<String> = _displayInput.asStateFlow()
 
@@ -63,6 +72,16 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
 
     private val _isSendingDisplayText = MutableStateFlow(false)
     val isSendingDisplayText: StateFlow<Boolean> = _isSendingDisplayText.asStateFlow()
+
+    /** Outcome of one dot-matrix write attempt; [message] is the text that was composed for the cluster. */
+    data class DisplaySendResult(val message: String, val success: Boolean)
+
+    private val _sendResults = MutableSharedFlow<DisplaySendResult>(extraBufferCapacity = 4)
+    val sendResults: SharedFlow<DisplaySendResult> = _sendResults.asSharedFlow()
+
+    /** Wall-clock time of the last valid telemetry frame; 0 until the first one arrives. */
+    private val _lastTelemetryAtMs = MutableStateFlow(0L)
+    val lastTelemetryAtMs: StateFlow<Long> = _lastTelemetryAtMs.asStateFlow()
 
     private var bleManager: BleManager? = null
     private var clusterChannelMap: ClusterChannelMap? = null
@@ -76,6 +95,7 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
                     _errors.emit("Invalid telemetry packet")
                 } else {
                     _telemetry.value = parsed
+                    _lastTelemetryAtMs.value = System.currentTimeMillis()
                     val fuelSummary = if (parsed.isFuelValid) {
                         "${parsed.fuelBars}/6 bars ${parsed.fuelLiters}L"
                     } else {
@@ -90,7 +110,51 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
     /** Call this from the GATT callback when a notification characteristic changes. */
     fun onNotification(bytes: ByteArray) {
         trace("RX ${bytes.size} bytes: ${bytes.toHexString()}")
+        if (_verbose.value) traceFrameBreakdown(bytes)
         notifications.tryEmit(bytes.copyOf())
+    }
+
+    fun setVerbose(enabled: Boolean) {
+        if (_verbose.value == enabled) return
+        _verbose.value = enabled
+        trace("Verbose BLE logging ${if (enabled) "ON" else "OFF"}")
+        if (enabled) bleManager?.onVerboseEnabled()
+    }
+
+    /** Logs [message] only while verbose logging is on. */
+    fun vtrace(message: String) {
+        if (_verbose.value) trace("[v] $message")
+    }
+
+    /** Plain-text dump of the whole retained log, for sharing off the device. */
+    fun logText(): String = _logs.value.joinToString("\n")
+
+    private fun traceFrameBreakdown(bytes: ByteArray) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val previous = lastFrame
+        val gap = if (lastFrameAtMs == 0L) "first" else "+${now - lastFrameAtMs}ms"
+        lastFrame = bytes.copyOf()
+        lastFrameAtMs = now
+        if (bytes.size != 30) {
+            vtrace("FRAME len=${bytes.size} (expected 30) $gap")
+            return
+        }
+        val changed = if (previous != null && previous.size == bytes.size) {
+            bytes.indices.filter { bytes[it] != previous[it] }
+        } else {
+            emptyList()
+        }
+        fun u(index: Int) = bytes[index].toInt() and 0xFF
+        fun ascii(from: Int, length: Int) = String(bytes, from, length, Charsets.ISO_8859_1)
+        val calculated = (1..27).sumOf { u(it) } and 0xFF
+        vtrace(
+            "FRAME $gap hdr=%02X type='%s' speed=%s odo=%s tripA=%s tripB=%s sep=%s fuel=%s b25=%d(0x%02X) b26-27=%02X%02X ck=%02X calc=%02X%s end=%02X changed=%s"
+                .format(
+                    u(0), ascii(1, 1), ascii(2, 3), ascii(5, 6), ascii(11, 6), ascii(17, 6),
+                    ascii(23, 1), ascii(24, 1), u(25), u(25), u(26), u(27),
+                    u(28), calculated, if (calculated == u(28)) "" else " CHECKSUM-MISMATCH", u(29), changed
+                )
+        )
     }
 
     fun attachBle(context: Context) {
@@ -121,7 +185,7 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US)
             .format(java.util.Date())
         Log.d("SXV-BLE", message)
-        _logs.value = (_logs.value + "$timestamp  $message").takeLast(200)
+        _logs.value = (_logs.value + "$timestamp  $message").takeLast(if (_verbose.value) VERBOSE_LOG_LIMIT else LOG_LIMIT)
     }
 
     fun onConnecting() {
@@ -174,6 +238,11 @@ class BleViewModel(application: android.app.Application) : AndroidViewModel(appl
         _isSendingDisplayText.value = true
         val sent = manager.sendDisplayText(message, secondaryMessage)
         _isSendingDisplayText.value = false
+        val composed = listOf(message.trim(), secondaryMessage.trim())
+            .filter { it.isNotEmpty() }
+            .joinToString(" | ")
+            .take(SuzukiDisplaySender.MAX_VISIBLE_TEXT_LENGTH)
+        _sendResults.tryEmit(DisplaySendResult(composed, sent))
         if (sent) {
             trace("Dot-matrix message queued successfully")
         } else {
