@@ -430,12 +430,6 @@ class BleManager(
             viewModel.vtrace("RSSI $rssi dBm (status=$status)")
         }
 
-        override fun onConnectionUpdated(gatt: BluetoothGatt, interval: Int, latency: Int, timeout: Int, status: Int) {
-            viewModel.vtrace(
-                "Link parameters: interval=${interval * 1.25} ms latency=$latency supervisionTimeout=${timeout * 10} ms status=$status"
-            )
-        }
-
         override fun onPhyUpdate(gatt: BluetoothGatt, txPhy: Int, rxPhy: Int, status: Int) {
             viewModel.vtrace("PHY update tx=$txPhy rx=$rxPhy (1=1M, 2=2M, 3=coded) status=$status")
         }
