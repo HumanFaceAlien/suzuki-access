@@ -47,7 +47,6 @@ frame layout, checksum rules and captured data.
 
 ## Credits
 
-- App icon: [Counter](https://icons8.com/icon/wDGaJlMDoEYy/counter) by [Icons8](https://icons8.com).
 - Fonts: Saira Condensed (SIL OFL) and Roboto Mono (Apache 2.0).
 
 ## License
