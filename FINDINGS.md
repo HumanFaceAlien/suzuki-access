@@ -24,7 +24,7 @@ App project: `C:\Users\paiad\AndroidStudioProjects\SXV`.
   cluster frame is not truncated (default MTU → 20-byte payload → parser rejects).
 - **Service/char UUIDs:** `0000fff0` (service), `0000fff1` (write), `0000fff2` (notify),
   CCCD `00002902`.
-- **Hard-coded MAC in SXV:** `XX:XX:XX:XX:XX:XX` (kept as a fallback; scan is primary).
+- **Hard-coded MAC fallback:** none — SXV discovers the cluster by advertised name; a paired MAC is only remembered per-install (see Settings).
 
 ## 2. Cluster → phone frame (command `'7'`, 30 bytes)
 

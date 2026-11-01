@@ -145,5 +145,5 @@ fun SettingsScreen(
 @Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, widthDp = 390, heightDp = 700)
 @Composable
 private fun SettingsPreview() = SXVTheme {
-    SettingsScreen(DistanceUnit.KILOMETERS, true, "ADITHYA", {}, {}, {}, PairedBike("XX:XX:XX:XX:XX:XX", "SBM01xxxxxx"), {})
+    SettingsScreen(DistanceUnit.KILOMETERS, true, "RIDER", {}, {}, {}, PairedBike("AA:BB:CC:DD:EE:FF", "SBM010000001"), {})
 }
