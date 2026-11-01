@@ -1,5 +1,5 @@
 ---
-name: SXV
+name: StromX
 description: A rally roadbook roll for one V-Strom SX, written live from the bike's own telemetry.
 colors:
   paper: "#FFFFFF"
@@ -175,7 +175,7 @@ components:
     padding: "14dp 16dp"
 ---
 
-# Design System: SXV
+# Design System: StromX
 
 ## Overview
 
@@ -228,7 +228,7 @@ A three-ink palette on white paper: ink for structure and text, one highlighter 
 - **Display Large** (Saira ExtraBold, 112sp / 104sp, -2sp, tabular): speed in the header box only. It is capped against the system font scale so three digits always fit their box.
 - **Display Small** (Saira ExtraBold, 40sp / 40sp, tabular): the live trip distance role. The roll draws it at 28sp so "8888.8" fits the distance column.
 - **Headline Medium** (Saira ExtraBold, 34sp / 36sp, tabular): secondary readings: engine temperature, fuel bars.
-- **Headline Small** (Saira ExtraBold, 30sp / 32sp, 0.5sp): screen titles and the SXV wordmark in the status line.
+- **Headline Small** (Saira ExtraBold, 30sp / 32sp, 0.5sp): screen titles and the StromX wordmark in the status line.
 - **Title Large** (Saira Bold, 24sp / 26sp): the NOW row title and logged row distances (with tabular figures).
 - **Title Medium** (Saira Bold, 20sp / 22sp): row titles, toggle-row titles, preset and recent message text, field input text.
 - **Body Large / Medium / Small** (Roboto Mono Medium, 15/13/12sp): notes under titles, detail values, log lines, disabled reasons, empty states. Body Small is the workhorse.

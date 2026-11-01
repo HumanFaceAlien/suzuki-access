@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SXV"
+rootProject.name = "StromX"
 include(":app")

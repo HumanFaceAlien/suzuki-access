@@ -1,11 +1,11 @@
 ---
 version: 1
 slug: "hyapaib-sxv-ui-screens-dashboardscreen-kt-4328442f"
-primary_target: "app/src/main/java/com/adithyapaib/sxv/ui/screens/DashboardScreen.kt"
-related_targets: ["app/src/main/java/com/adithyapaib/sxv/ui/SxvApp.kt"]
+primary_target: "app/src/main/java/com/adithyapaib/stromx/ui/screens/DashboardScreen.kt"
+related_targets: ["app/src/main/java/com/adithyapaib/stromx/ui/StromXApp.kt"]
 ---
 
-# Surface brief: SXV app shell (Ride, Message, Logs, Settings)
+# Surface brief: StromX app shell (Ride, Message, Logs, Settings)
 
 Scope: the whole Android app, Operate mode. Audience: one V-Strom SX owner, phone mounted or
 pocketed. Task: read the bike at a glance, send short cluster messages, diagnose the link.

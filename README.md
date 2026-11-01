@@ -1,4 +1,4 @@
-# SXV — V-Strom instrument link
+# StromX — V-Strom instrument link
 
 An Android companion app for the Suzuki V-Strom SX. It connects over Bluetooth LE to the
 bike's instrument cluster, shows live ride data, and sends Google Maps turn-by-turn
@@ -13,7 +13,7 @@ Protocol details and reverse-engineering notes are in [FINDINGS.md](FINDINGS.md)
 |---|---|
 | Ride | Status line, a ruled header (speed, engine temperature with a sliding needle, six fuel cells) and the roadbook roll: a live "Now" row plus every event of the ride (start, connected, warmed up, stopped, riding again, fuel down, link lost) at the trip distance it happened. Readings dim when data goes stale. |
 | Rides | Start a ride and it keeps the date, start/end times, distance from the odometer, top speed and average speed, plus an estimate of the fuel it used (distance at your own recent economy, priced at your average ₹/L). A live card ticks the elapsed time while you ride; finished rides collect below with every detail, and totals across all rides. A running ride survives an app restart. |
-| Fuel | Fill-up log (litres, total cost, odometer prefilled from the bike, full tank or top-up). Economy measured full tank to full tank, cost per km, this month's spend and average price per litre; a line chart of economy per full tank and a column chart of spend per month. When the fuel bars jump up by two or more, it asks you to log the fill-up. **Fuel left and range:** counted down from your last full tank at your recent full-to-full economy; each time the gauge steps down, SXV learns what that bar really means on your bike and re-anchors the estimate there, so error doesn't build up. Shown with an honest ± and what it is counted from, a tank gauge with the learned bar levels, a fuel-left chart since the last full tank, and on the Ride header ("FUEL · ≈ 260 KM"). One low-range alert per tank at 40 km, with a "Nearest pump" shortcut. Tank size defaults to 12 L until you set yours. |
+| Fuel | Fill-up log (litres, total cost, odometer prefilled from the bike, full tank or top-up). Economy measured full tank to full tank, cost per km, this month's spend and average price per litre; a line chart of economy per full tank and a column chart of spend per month. When the fuel bars jump up by two or more, it asks you to log the fill-up. **Fuel left and range:** counted down from your last full tank at your recent full-to-full economy; each time the gauge steps down, StromX learns what that bar really means on your bike and re-anchors the estimate there, so error doesn't build up. Shown with an honest ± and what it is counted from, a tank gauge with the learned bar levels, a fuel-left chart since the last full tank, and on the Ride header ("FUEL · ≈ 260 KM"). One low-range alert per tank at 40 km, with a "Nearest pump" shortcut. Tank size defaults to 12 L until you set yours. |
 | Service | Maintenance reminders counted down from the bike's own odometer and/or the calendar (oil, chain, brakes, service…). Quick-add templates with typical starting intervals to edit, a ruled meter per item that turns highlighter when due soon or overdue, "Done at 12,336 km", a badge on the tab, and one notification when an item becomes due soon and again when due. |
 | Logs | Connection details (state, last frame, FFF0/FFF1/FFF2), the BLE activity trace, a verbose-logging switch, copy and clear. |
 | Settings | Rider name for the cluster's welcome greeting, Google Maps navigation on the cluster (switch, notification access, arrow tester), units (km/°C or mi/°F), keep screen on while connected, shortcut to system Bluetooth settings. |
@@ -71,8 +71,8 @@ permissions on first launch.
 ## Project layout
 
 ```
-app/src/main/java/com/adithyapaib/sxv/
-  MainActivity.kt          permissions, Bluetooth state receiver, hosts SxvApp
+app/src/main/java/com/adithyapaib/stromx/
+  MainActivity.kt          permissions, Bluetooth state receiver, hosts StromXApp
   ble/                     BleManager (scan, GATT, writes), BleViewModel (state),
                            SuzukiPacketParser, ClusterWriter, SuzukiCommandPacket,
                            SuzukiChecksum, VStromTelemetry
@@ -81,7 +81,7 @@ app/src/main/java/com/adithyapaib/sxv/
   ride/Roadbook.kt         turns telemetry and link changes into roadbook events
   ride/Rides.kt            ride records: distance, duration, top speed, fuel estimate
   settings/AppSettings.kt  units, keep-screen-on, rider name (SharedPreferences)
-  ui/SxvApp.kt             tab shell, haptics, keep-screen-on, snackbars
+  ui/StromXApp.kt             tab shell, haptics, keep-screen-on, snackbars
   ui/screens/              Ride (DashboardScreen), Rides, Fuel, Service, Logs, Settings
   ui/components/           roadbook primitives (ruled boxes, press blocks, rolling digits),
                            header box and roll, tulip diagrams, drawn tab icons

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-10-30T00:00:00Z",
-  "title": "Design System: SXV",
+  "title": "Design System: StromX",
   "extensions": {
     "verification": {
-      "source": "Derived from shipped Jetpack Compose source (ui/theme, ui/components, ui/screens, ui/SxvApp.kt, res/font).",
+      "source": "Derived from shipped Jetpack Compose source (ui/theme, ui/components, ui/screens, ui/StromXApp.kt, res/font).",
       "compiled": false,
       "rendered": false,
       "note": "No Android SDK on the documenting machine; Material-drawn shapes (navigation indicator, switch) are unverified on device."
@@ -21,7 +21,7 @@
       "display-large": { "displayName": "Display Large", "purpose": "Speed in the header box only; capped against system font scale so three digits fit." },
       "display-small": { "displayName": "Display Small", "purpose": "Live trip distance role; the roll draws it at 28sp to fit the distance column." },
       "headline-medium": { "displayName": "Headline Medium", "purpose": "Engine temperature and fuel readings." },
-      "headline-small": { "displayName": "Headline Small", "purpose": "Screen titles and the SXV wordmark." },
+      "headline-small": { "displayName": "Headline Small", "purpose": "Screen titles and the StromX wordmark." },
       "title-large": { "displayName": "Title Large", "purpose": "NOW row title and logged row distances (tabular)." },
       "title-medium": { "displayName": "Title Medium", "purpose": "Row titles, toggle titles, preset and recent messages, field input." },
       "body-large": { "displayName": "Body Large", "purpose": "Base for the cluster preview line (drawn at 20sp, 2sp tracking)." },

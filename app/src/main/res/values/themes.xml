@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.SXV" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/sxv_window</item>
+    <style name="Theme.StromX" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/stromx_window</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
     </style>

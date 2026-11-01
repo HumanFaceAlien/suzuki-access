@@ -1,12 +1,12 @@
-# SXV — Reverse-Engineering Findings
+# StromX — Reverse-Engineering Findings
 
-Companion document to the `SXV` Android app (`com.adithyapaib.sxv`). Captures the protocol
+Companion document to the `StromX` Android app (`com.adithyapaib.stromx`). Captures the protocol
 and behavioural findings extracted from the official Suzuki app
 (`suzuki.com.suzuki`, v7.5, SHA-256 `C7E3466BEEA3D9512C5B6F79A79377389B1BBC57DFC6986E43EFA727E729F5CF`)
 and validated against real over-the-air captures (nRF Connect, 2026-07-10).
 
 Workspace: `C:\Users\paiad\Desktop\Suzuki` (jadx export of the official APK).
-App project: `C:\Users\paiad\AndroidStudioProjects\SXV`.
+App project: `C:\Users\paiad\AndroidStudioProjects\StromX`.
 
 ---
 
@@ -16,15 +16,15 @@ App project: `C:\Users\paiad\AndroidStudioProjects\SXV`.
   `SA`/`SB`/`SC` **and is exactly 12 chars** (e.g. `SBM01xxxxxx`). It does **not**
   pair/bond — no `createBond` anywhere in the APK.
 - **Connect mode:** `BluetoothDevice.connectGatt(ctx, autoConnect=true, cb, TRANSPORT_LE)`.
-  `autoConnect=true` is what made the stock app reliable; SXV previously used `false`.
+  `autoConnect=true` is what made the stock app reliable; StromX previously used `false`.
 - **Wake read:** ~500 ms after connect the stock app reads the **4th GATT service's 2nd
   characteristic** (`services.get(3).getCharacteristics().get(1)`). This read activates
-  the cluster's notification stream. SXV now replicates it.
-- **MTU:** the stock app uses FastBle's default (23). SXV requests **247** so the 30-byte
+  the cluster's notification stream. StromX now replicates it.
+- **MTU:** the stock app uses FastBle's default (23). StromX requests **247** so the 30-byte
   cluster frame is not truncated (default MTU → 20-byte payload → parser rejects).
 - **Service/char UUIDs:** `0000fff0` (service), `0000fff1` (write), `0000fff2` (notify),
   CCCD `00002902`.
-- **Hard-coded MAC fallback:** none — SXV discovers the cluster by advertised name; a paired MAC is only remembered per-install (see Settings).
+- **Hard-coded MAC fallback:** none — StromX discovers the cluster by advertised name; a paired MAC is only remembered per-install (see Settings).
 
 ## 2. Cluster → phone frame (command `'7'`, 30 bytes)
 
@@ -55,7 +55,7 @@ Validation gate (mirrors `C.java:817` / `NavigationActivity:190`):
 - V-STROM SX device name prefix `?BM01…` → **plain sum** (`sum(bytes[1..27]) & 0xFF`).
 - Other models → **ones' complement** (`~sum & 0xFF`).
 
-SXV implements both (`SuzukiChecksum.Mode.PLAIN_SUM` / `ONES_COMPLEMENT`), defaulting to
+StromX implements both (`SuzukiChecksum.Mode.PLAIN_SUM` / `ONES_COMPLEMENT`), defaulting to
 plain sum for the V-STROM SX.
 
 ## 4. Field semantics
@@ -66,7 +66,7 @@ plain sum for the V-STROM SX.
 - **Odometer** `[5..10]`: 6 digits, leading zeros stripped; 0 on all-zero.
 - **Trip A/B** `[11..16]` / `[17..22]`: 6 digits, tenths.
 - **Gear** `[23]`: always `'N'` in all 110 captured frames.
-- **Fuel** `[24]`: ASCII `'1'..'6'` → bars 1..6; else 0 / invalid. SXV assumes
+- **Fuel** `[24]`: ASCII `'1'..'6'` → bars 1..6; else 0 / invalid. StromX assumes
   `fuelLiters = bars * 2.0` — **uncalibrated, marked `TODO(capacity)`**.
   Also `K = unsignedInt(b) - 64` (stored, purpose not fully identified).
 - **`[25]` engine temperature (°C, raw byte)** — *supersedes the accumulator reading below.*
@@ -74,7 +74,7 @@ plain sum for the V-STROM SX.
   start of a ride, climbing to a 90 peak, 78 after a 10 minute break, 46→53 on a restart after
   1h40. Likely oil/engine temperature (the V-STROM SX 250 is oil-cooled), **not yet checked
   against the cluster's own reading**. `[26]/[27]` are `FF FF` in every frame (padding).
-  Surfaced in SXV as `engineTempC`.
+  Surfaced in StromX as `engineTempC`.
 - **`[25..27]` consumption accumulator (old, disproved for byte 25)**: `NavigationActivity:203-219` decodes it as a
   24-bit fixed-point value into `public double Y`, but **`Y` is never read anywhere**
   in the APK; the dashboard parser (`C.java:831-832`) reads and discards it.
@@ -82,7 +82,7 @@ plain sum for the V-STROM SX.
   - "Energy Consumption" branch: `/10000`
   - default (V-STROM SX): `(parseInt(strC[0..13],2) + parseInt(strC[13..24],2)/2048)/10`
   - Byte[25] climbs monotonically per session (`0x1B`→`0x58`), `[26]/[27]` stay `0xFF`.
-  - **Not surfaced in SXV** (covered by checksum only).
+  - **Not surfaced in StromX** (covered by checksum only).
   - **Revised after the 2026-07-10 logs (see §6):** byte `[25]` is not a fuel
     accumulator. It tracks engine temperature in °C, so the monotonic climb above is
     just warm-up. The SX 250 is oil-cooled, so this is probably oil/engine temperature
@@ -116,7 +116,7 @@ Checksum = same plain-sum/ones'-complement rule (model-dependent).
   **glyphs unchecked on this cluster**, hence the arrow tester in Settings.
 - **`'6'`** (identity): sent after the CCCD write; see §6a.
 - **`'2'`** (call control), **`'3'`** (status request / heartbeat): present in the APK,
-  **not yet ported** to SXV.
+  **not yet ported** to StromX.
 
 ### 5a. Google Maps → cluster (added 2026-10-30, not built or tested)
 
@@ -130,7 +130,7 @@ phrases to a maneuver, anything else is straight. `NavigationController` re-send
 current step every second while navigation runs (the official app streams ~2.7/s) and
 sends an end frame (`0x2E`, status `0`, byte 24 `0`) when the notification goes away.
 Nav writes share FFF1's one-write slot with display messages; a busy slot is skipped
-and retried next tick. Works only while SXV holds the BLE connection.
+and retried next tick. Works only while StromX holds the BLE connection.
 
 ## 6. Captured data (4 nRF Connect logs, 110 thirty-byte frames)
 
@@ -184,16 +184,16 @@ Device Information contents on this bike:
 
 **Connection behaviour (corrects the earlier assumption):**
 - ~~nRF Connect wrote nothing to FFF1 and the bike still streamed `'7'` frames, so no
-  identity/handshake write is needed on this bike.~~ **Revised 2026-10-30:** SXV's own
+  identity/handshake write is needed on this bike.~~ **Revised 2026-10-30:** StromX's own
   logs show a silent session (CCCD confirmed, zero frames for 68 s, then status 8) and
   the rider reports data appears only after opening the official app. Android shares one
   LE link per device between apps, so frames reach every subscribed app once the
   official app has sent its identity frame (`'6'`). The streaming nRF sessions all began
   with an `ACL_CONNECTED` broadcast before nRF connected, i.e. another app already held
-  the link. SXV now sends `'6'` itself after the CCCD write (unconfirmed on the bike).
+  the link. StromX now sends `'6'` itself after the CCCD write (unconfirmed on the bike).
 - A second Suzuki cluster nearby, `SAS02xxxxxx` @ `XX:XX:XX:XX:XX:XX` (Access-family
-  name, Telit Terminal I/O service `FEFB`, no FFF0), matched SXV's name filter and was
-  connected to repeatedly. SXV now prefers the known bike and skips non-FFF0 devices.
+  name, Telit Terminal I/O service `FEFB`, no FFF0), matched StromX's name filter and was
+  connected to repeatedly. StromX now prefers the known bike and skips non-FFF0 devices.
 - Connections that streamed had the bike negotiate parameters (7.5 ms → 48.75 ms
   interval, MTU 65) within about a second of connecting. Connections that never
   negotiated stayed silent and ended in GATT error 8 (supervision timeout) after
@@ -204,7 +204,7 @@ Golden frames used as regression tests:
 - Parked: `A5-37-30-30-30-30-30-38-38-38-35-30-30-38-36-34-30-30-30-32-31-36-31-4E-34-28-FF-FF-08-7F`
 - Moving: `A5-37-30-33-33-30-30-38-38-38-34-30-30-38-36-33-32-30-30-32-31-35-33-4E-34-57-FF-FF-3E-7F`
 
-## 7. SXV changes made (this session)
+## 7. StromX changes made (this session)
 
 - `SuzukiChecksum.kt` (new): plain-sum / ones'-complement, sums bytes 1..27.
 - `SuzukiPacketParser.kt` (rewritten): strict gate; `unknownField` → `speed`.
@@ -265,7 +265,7 @@ Android accepts every FFF1 write, but the display has not been seen to change. C
    parked), then check a real Google Maps route; note any notification text the parser
    gets wrong (verbose log shows the raw Maps notification).
 4. Verify the new connection stack end-to-end with the bike powered on (trace via
-   `adb logcat -s SXV-BLE`).
+   `adb logcat -s StromX-BLE`).
 5. Build and run the verbose logging changes (never compiled; no JDK/SDK on the machine
    where they were written), then capture a full ride with verbose on.
 6. Confirm byte `[25]` against the cluster's temperature readout (if the SX shows one).

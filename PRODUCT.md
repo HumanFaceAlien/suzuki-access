@@ -15,7 +15,7 @@ this is a personal app for one rider and one bike, not a store product.
 
 ## Product Purpose
 
-SXV links the phone to the bike's instrument cluster over Bluetooth LE without the official
+StromX links the phone to the bike's instrument cluster over Bluetooth LE without the official
 Suzuki Ride Connect app. It shows what the cluster reports live and can push short text to
 the cluster's dot-matrix display. Success: a rider trusts it at a glance, and it feels like
 part of the bike rather than a debugging tool.
@@ -45,7 +45,7 @@ link does and does not carry.
 ## Brand Commitments
 
 Binding, from the user: a CRED-app vibe; dynamic, with moving parts rather than only numbers;
-very few colours; a white background; built for a bike. Name: SXV.
+very few colours; a white background; built for a bike. Name: StromX.
 
 ## Evidence on Hand
 
