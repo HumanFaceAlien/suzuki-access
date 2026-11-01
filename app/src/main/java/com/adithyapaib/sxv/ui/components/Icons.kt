@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 
 enum class AppTab(val label: String) {
     Dashboard("Ride"),
+    Rides("Rides"),
     Fuel("Fuel"),
     Service("Service"),
     Logs("Logs"),
@@ -36,6 +37,13 @@ fun TabIcon(tab: AppTab, tint: Color, modifier: Modifier = Modifier) {
                     moveTo(w * 0.3f, w * 0.34f); lineTo(w * 0.5f, w * 0.12f); lineTo(w * 0.7f, w * 0.34f)
                 }
                 drawPath(head, tint, style = stroke)
+            }
+            AppTab.Rides -> {
+                // Stopwatch: the case, the crown, and a hand on the elapsed time.
+                drawCircle(tint, w * 0.32f, Offset(w * 0.5f, w * 0.6f), style = stroke)
+                drawLine(tint, Offset(w * 0.5f, w * 0.6f), Offset(w * 0.5f, w * 0.42f), px, StrokeCap.Round)
+                drawLine(tint, Offset(w * 0.38f, w * 0.14f), Offset(w * 0.62f, w * 0.14f), px, StrokeCap.Round)
+                drawLine(tint, Offset(w * 0.5f, w * 0.14f), Offset(w * 0.5f, w * 0.26f), px, StrokeCap.Round)
             }
             AppTab.Fuel -> {
                 // Pump body, a level line, and the hose curling to the nozzle.

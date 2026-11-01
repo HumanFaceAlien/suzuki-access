@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.adithyapaib.sxv.garage.DueState
 import com.adithyapaib.sxv.garage.GarageViewModel
 import com.adithyapaib.sxv.ui.screens.FuelScreen
+import com.adithyapaib.sxv.ui.screens.RidesScreen
 import com.adithyapaib.sxv.ui.screens.ServiceScreen
 import kotlinx.coroutines.launch
 
@@ -79,6 +80,7 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageV
     val unit by settings.unit.collectAsStateWithLifecycle()
     val keepScreenOn by settings.keepScreenOn.collectAsStateWithLifecycle()
     val fuelRecords by garage.fuel.collectAsStateWithLifecycle()
+    val rides by garage.rides.collectAsStateWithLifecycle()
     val serviceStatuses by garage.service.collectAsStateWithLifecycle()
     val lastOdometerKm by garage.odometerKm.collectAsStateWithLifecycle()
     val fillUpPrompt by garage.fillUpPrompt.collectAsStateWithLifecycle()
@@ -210,6 +212,15 @@ fun SxvApp(viewModel: BleViewModel, settings: SettingsViewModel, garage: GarageV
                         onConnect = viewModel::connect,
                         onDisconnect = viewModel::disconnect,
                         fuelEstimate = fuelEstimate
+                    )
+                    AppTab.Rides -> RidesScreen(
+                        rides = rides,
+                        odometerKm = lastOdometerKm,
+                        unit = unit,
+                        onStart = garage::startRide,
+                        onStop = garage::stopRide,
+                        onDiscard = garage::discardRide,
+                        onDelete = garage::deleteRide
                     )
                     AppTab.Fuel -> FuelScreen(
                         records = fuelRecords,

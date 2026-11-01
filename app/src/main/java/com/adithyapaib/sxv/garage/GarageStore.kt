@@ -1,5 +1,6 @@
 package com.adithyapaib.sxv.garage
 
+import com.adithyapaib.sxv.ride.RideRecord
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,7 +17,9 @@ data class GarageData(
     /** Each time the fuel gauge stepped down, for learning what each bar means. */
     val barDrops: List<BarDrop> = emptyList(),
     /** The rider's tank size; null means [FuelEstimator.DEFAULT_TANK_LITRES]. */
-    val tankLitres: Double? = null
+    val tankLitres: Double? = null,
+    /** Recorded rides, oldest first. An entry with a null end is a ride still running. */
+    val rides: List<RideRecord> = emptyList()
 )
 
 class GarageStore(dir: File) {
@@ -66,6 +69,22 @@ class GarageStore(dir: File) {
                 })
             }
         })
+        put("rides", JSONArray().apply {
+            data.rides.forEach { r ->
+                put(JSONObject().apply {
+                    put("id", r.id)
+                    put("startedAtMs", r.startedAtMs)
+                    r.endedAtMs?.let { put("endedAtMs", it) }
+                    r.startOdometerKm?.let { put("startOdometerKm", it) }
+                    r.endOdometerKm?.let { put("endOdometerKm", it) }
+                    put("maxSpeedKph", r.maxSpeedKph)
+                    r.startFuelBars?.let { put("startFuelBars", it) }
+                    r.endFuelBars?.let { put("endFuelBars", it) }
+                    r.fuelUsedLitres?.let { put("fuelUsedLitres", it) }
+                    r.fuelCost?.let { put("fuelCost", it) }
+                })
+            }
+        })
     }
 
     private fun decode(json: JSONObject): GarageData {
@@ -73,7 +92,23 @@ class GarageStore(dir: File) {
         val items = json.optJSONArray("items") ?: JSONArray()
         val notified = json.optJSONArray("notified") ?: JSONArray()
         val drops = json.optJSONArray("barDrops") ?: JSONArray()
+        val rides = json.optJSONArray("rides") ?: JSONArray()
         return GarageData(
+            rides = (0 until rides.length()).map { index ->
+                val o = rides.getJSONObject(index)
+                RideRecord(
+                    id = o.getLong("id"),
+                    startedAtMs = o.getLong("startedAtMs"),
+                    endedAtMs = o.optLongOrNull("endedAtMs"),
+                    startOdometerKm = o.optIntOrNull("startOdometerKm"),
+                    endOdometerKm = o.optIntOrNull("endOdometerKm"),
+                    maxSpeedKph = o.optInt("maxSpeedKph", 0),
+                    startFuelBars = o.optIntOrNull("startFuelBars"),
+                    endFuelBars = o.optIntOrNull("endFuelBars"),
+                    fuelUsedLitres = o.optDoubleOrNull("fuelUsedLitres"),
+                    fuelCost = o.optDoubleOrNull("fuelCost")
+                )
+            },
             barDrops = (0 until drops.length()).map { index ->
                 val o = drops.getJSONObject(index)
                 BarDrop(o.getInt("odometerKm"), o.getInt("toBars"), o.getLong("atMs"))
@@ -108,4 +143,8 @@ class GarageStore(dir: File) {
     }
 
     private fun JSONObject.optIntOrNull(key: String): Int? = if (has(key)) getInt(key) else null
+
+    private fun JSONObject.optLongOrNull(key: String): Long? = if (has(key)) getLong(key) else null
+
+    private fun JSONObject.optDoubleOrNull(key: String): Double? = if (has(key)) getDouble(key) else null
 }

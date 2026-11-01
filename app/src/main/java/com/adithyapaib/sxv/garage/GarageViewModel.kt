@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.adithyapaib.sxv.ble.VStromTelemetry
+import com.adithyapaib.sxv.ride.RideMath
+import com.adithyapaib.sxv.ride.RideRecord
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,6 +33,11 @@ class GarageViewModel(application: Application) : AndroidViewModel(application) 
     val odometerKm: StateFlow<Int?> = data
         .map { it.lastOdometerKm }
         .stateIn(viewModelScope, SharingStarted.Eagerly, data.value.lastOdometerKm)
+
+    /** Every recorded ride, newest first; an entry with a null end is still running. */
+    val rides: StateFlow<List<RideRecord>> = data
+        .map { RideMath.newestFirst(it.rides) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RideMath.newestFirst(data.value.rides))
 
     /** Ticks when the app comes back to the foreground, so day-based countdowns move on. */
     private val clock = MutableStateFlow(System.currentTimeMillis())
@@ -70,10 +77,26 @@ class GarageViewModel(application: Application) : AndroidViewModel(application) 
             update { it.copy(lastOdometerKm = t.odometer) }
             notifyNewlyDue()
         }
+        trackRide(t)
         if (t.isFuelValid) {
             liveBars.value = t.fuelBars
             trackGauge(t.fuelBars, t.odometer)
             notifyLowRange()
+        }
+    }
+
+    /** While a ride runs: catch the start odometer on the first frame and keep the top speed. */
+    private fun trackRide(t: VStromTelemetry) {
+        val active = data.value.rides.firstOrNull { it.endedAtMs == null } ?: return
+        val start = active.startOdometerKm ?: t.odometer.takeIf { it > 0 }
+        val maxSpeed = maxOf(active.maxSpeedKph, t.speed)
+        if (start == active.startOdometerKm && maxSpeed == active.maxSpeedKph) return
+        update { d ->
+            d.copy(
+                rides = d.rides.map { r ->
+                    if (r.id == active.id) r.copy(startOdometerKm = start, maxSpeedKph = maxSpeed) else r
+                }
+            )
         }
     }
 
@@ -131,6 +154,52 @@ class GarageViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun deleteFuel(id: Long) = update { it.copy(fuel = it.fuel.filterNot { r -> r.id == id }) }
+
+    // Rides. The running ride is just a record with a null end, persisted like any other,
+    // so closing the app mid-ride and reopening picks the same ride back up.
+    fun startRide() {
+        if (data.value.rides.any { it.endedAtMs == null }) return
+        update {
+            it.copy(
+                rides = it.rides + RideRecord(
+                    id = it.nextId,
+                    startedAtMs = System.currentTimeMillis(),
+                    endedAtMs = null,
+                    // Odometer and gauge fill in from the first live frame if the bike hasn't reported yet.
+                    startOdometerKm = it.lastOdometerKm,
+                    endOdometerKm = null,
+                    maxSpeedKph = 0,
+                    startFuelBars = liveBars.value,
+                    endFuelBars = null,
+                    fuelUsedLitres = null,
+                    fuelCost = null
+                ),
+                nextId = it.nextId + 1
+            )
+        }
+    }
+
+    /** Stamps the end and derives distance, average speed and the fuel estimate. */
+    fun stopRide() {
+        val now = System.currentTimeMillis()
+        update { d ->
+            val active = d.rides.firstOrNull { it.endedAtMs == null } ?: return@update d
+            val finished = RideMath.finish(
+                ride = active,
+                endedAtMs = now,
+                endOdometerKm = d.lastOdometerKm,
+                endFuelBars = liveBars.value,
+                kmPerLitre = FuelEstimator.recentKmPerLitre(d.fuel),
+                pricePerLitre = FuelMath.summary(d.fuel, now).avgPricePerLitre
+            )
+            d.copy(rides = d.rides.map { if (it.id == active.id) finished else it })
+        }
+    }
+
+    /** Ends the running ride without keeping it. */
+    fun discardRide() = update { it.copy(rides = it.rides.filterNot { r -> r.endedAtMs == null }) }
+
+    fun deleteRide(id: Long) = update { it.copy(rides = it.rides.filterNot { r -> r.id == id }) }
 
     fun dismissFillUp() {
         _fillUpPrompt.value = null
