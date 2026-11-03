@@ -349,7 +349,7 @@ class BleManager(
                 return
             }
             val looksLikeCluster = name.length == 12 &&
-                (name.contains("SA") || name.contains("SB") || name.contains("SC"))
+                (name.contains("SA") || name.contains("SB") || name.contains("SC") || name.contains("SBS"))
             if (!looksLikeCluster || device.address in rejectedAddresses) return
             // Keep scanning the whole window; the strongest signal wins on timeout.
             if (scanSeen.add(device.address)) {
